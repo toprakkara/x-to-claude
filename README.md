@@ -1,80 +1,124 @@
 # x-to-claude
 
-X'teki bir gönderiyi, bu Mac'te açık bir Claude Code oturumuna tek tıkla gönderir. Şartname: [SPEC.md](SPEC.md).
+Send a post from X to a Claude Code session running on your Mac with one click. Spec (in Turkish): [SPEC.md](SPEC.md).
 
 ```
-Chrome eklentisi (x.com)  ──HTTP, token──▶  yerel relay (127.0.0.1:47615)  ──Unix soket──▶  Claude Code oturumu
-                                                  ▲
-                              ~/.x-to-claude/sessions/*.json  ◀── SessionStart / SessionEnd hook'ları
+Browser extension (x.com)  ──HTTP, token──▶  local relay (127.0.0.1:47615)  ──Unix socket──▶  Claude Code session
+                                                   ▲
+                               ~/.x-to-claude/sessions/*.json  ◀── SessionStart / SessionEnd hooks
 ```
 
-## Durum
+The extension adds a button next to the bookmark button on every post:
 
-| Parça | Durum |
+- **Left click: save to the archive.** The relay asks Jev (TypeSafe's System One model) which archive category fits. If Jev picks an existing category with confidence ≥ 0.85, the relay writes the note itself. Otherwise the post goes to the archivist, a dedicated Claude Code session that decides and can open a new category. Saved posts show an orange button.
+- **Right click (or Shift+Enter): send to a session.** Lists your live Claude Code sessions, from both the terminal and the desktop app. The post you pick goes to that session as a message, with its URL, author, date, text, any quoted post and media links.
+
+If Jev judges a saved post relevant to a configured topic (by default legal tech, for the `Method Path` session), the relay sends that session a short notice. The extension's UI text is in Turkish.
+
+## Status
+
+| Part | Status |
 |---|---|
-| Relay: `/sessions`, `/send`, token, Origin ve Host denetimi, boyut ve oran sınırı, ardışık gönderileri birleştiren kuyruk | Hazır, testli |
-| Oturum kaydı hook'ları ve kurulum betiği | Hazır, testli; bu Mac'te kurulu (2026-10-05) |
-| Chrome eklentisi: düğme, oturum menüsü, bildirim, ayarlar | Hazır; Arc'ta gerçek x.com'da uçtan uca denendi (2026-10-05) |
-| Gelen kutusu soketinin mesaj formatı (`relay/inbox.mjs`) | Doğrulandı; relay'den bir Claude Code oturumuna uçtan uca teslim denendi |
+| Relay: `/sessions`, `/send`, token, Origin and Host checks, size and rate limits, a queue that merges rapid sends | Done, tested |
+| Session registry hooks and installer | Done, tested |
+| Browser extension: button, session menu, toast, options page | Done; tested end to end on the real x.com in Arc |
+| Inbox socket message format (`relay/inbox.mjs`) | Verified on Claude Code 2.1.286; end-to-end delivery from the relay to a Claude Code session tested |
+| Archive: `/save`, `/saved`, Jev classification, escalation to the archivist, topic notices | Done, tested with a stubbed Jev; Jev itself evaluated against 38 Claude-labelled posts |
 
-## Kurulum
+The inbox socket's message line isn't documented. The format was taken from Claude Code 2.1.286 and may break in a later version.
 
-Gereken: Node 20+ ve Chromium tabanlı bir tarayıcı (Chrome 116+, Arc). Dış bağımlılık yok.
+## Setup
 
-1. Relay'i başlat ve token'ı eklenti klasörüne yaz (`extension/relay.json`, 0600, `.gitignore`'da):
+Requires Node 20+ and a Chromium-based browser (Chrome 116+, Arc). No external dependencies.
+
+1. Start the relay and write its token into the extension folder (`extension/relay.json`, mode 0600, git-ignored):
    ```bash
    npm run relay
    ```
    ```bash
    npm run extension:config
    ```
-2. Hook'ları kullanıcı ayarlarına ekle (`~/.claude/settings.json`, önce yedek alınır). Önce ne yazılacağını görmek için `--dry-run` kullan:
+2. Add the hooks to your user settings (`~/.claude/settings.json`; a backup is made first). To see what will be written, run `--dry-run` first:
    ```bash
    node scripts/install-hooks.mjs --dry-run
    ```
    ```bash
    npm run hooks:install
    ```
-   Kurulumdan **sonra** başlayan ya da devam ettirilen oturumlar listede görünür.
-3. Eklentiyi yükle: `chrome://extensions` (Arc'ta `arc://extensions`) → Geliştirici modu → "Paketlenmemiş öğe yükle" → `extension/` klasörü. Token `relay.json` dosyasından okunur. İstersen eklenti simgesine tıklayıp ayarlar sayfasında "Bağlantıyı dene"ye bas.
-4. İstersen ayarlar sayfasında görünen eklenti kimliğini `~/.x-to-claude/config.json` içindeki `extensionId` alanına yaz. Bundan sonra relay yalnız bu eklentiden gelen istekleri kabul eder. Paketlenmemiş eklentinin kimliği klasör yolundan türetilir, bu yüzden klasör taşınırsa kimlik değişir.
-5. Relay'in oturum açılışında başlaması ve çökerse yeniden başlaması için launchd ajanını kur:
+   Only sessions started or resumed **after** this step appear in the list.
+3. Load the extension: open `chrome://extensions` (`arc://extensions` in Arc), turn on Developer mode, click "Load unpacked" and pick the `extension/` folder. The token is read from `relay.json`. To check the connection, click the extension icon and press "Bağlantıyı dene" (Test connection) on the options page.
+4. Optional: copy the extension ID shown on the options page into the `extensionId` field of `~/.x-to-claude/config.json`. From then on the relay accepts requests only from this extension. An unpacked extension's ID is derived from its folder path, so moving the folder changes the ID.
+5. Install the launchd agent so the relay starts at login and restarts if it crashes:
    ```bash
    npm run launchd:install
    ```
-   Durumunu görmek için `npm run launchd:status`, kod ya da `config.json` değişince yeniden başlatmak için `npm run launchd:restart`, kaldırmak için `npm run launchd:uninstall` kullan. Kayıtlar `~/.x-to-claude/relay.log` dosyasına yazılır. Ajan kurulum anındaki Node'un mutlak yolunu kullanır: nvm ile Node sürümü değişirse kurulumu yeniden çalıştır.
+   Other commands:
+   - `npm run launchd:status` shows the agent's state.
+   - `npm run launchd:restart` restarts the relay after a code or `config.json` change.
+   - `npm run launchd:uninstall` removes the agent.
 
-## Teslim kuralları
+   Logs go to `~/.x-to-claude/relay.log`. The agent uses the absolute path of the Node binary that was active at install time; if you switch Node versions with nvm, run the install again.
 
-Relay hedef oturumun alt süreci değildir ve kimlik doğrulama satırı göndermez. Claude Code bu yüzden mesajı "izin sınıfı belirtmeyen başka bir oturumdan" gelmiş gibi işler:
+## Archive
 
-- **İzin soran oturumlar** (normal, auto, acceptEdits) mesajı hemen teslim eder.
-- **İzinleri atlayan (bypass) oturumlar** mesajı onay için bekletir:
-  - Terminalde bir onay penceresi açılır.
-  - Masaüstü uygulaması ve VS Code bu pencereyi gösteremez; mesaj 5 dakika sonra düşer.
-  - Böyle oturumlara da göndermek istiyorsan `crossSessionInbound` ayarını `"accept"` yap. Bu ayar diğer oturumlardan gelen bütün mesajlara uygulanır.
-  - Bu Mac'te ayar kullanıcı ayarlarında `"accept"`. Şu senaryo denendi ve çalıştı: launchd'ye bağlı, yani hiçbir oturumun alt süreci olmayan bir relay'den bypass modundaki bir masaüstü oturumuna gönderim. Ayar açık oturumda yeniden başlatma gerekmeden devreye girdi.
+The archive lives in its own folder (`archiveDir`, default `~/_DEV/x-arsiv`) with its own Claude Code session, the archivist. That folder holds:
 
-Relay'in `ok` yanıtı yalnız mesajın sokete yazıldığı anlamına gelir. Soket yanıt dönmez. Bekletilen ya da atılan mesaj relay'e bildirilmez.
+- `CLAUDE.md` — the archivist's instructions;
+- `kategoriler.md` — the categories, one `- slug — description` line each. The descriptions are also Jev's choice criteria;
+- `gelen/` — incoming posts: `kuyruk.jsonl` from the button, imports, and hand-off lists;
+- `plan/` — one classification line per post;
+- `kutuphane/<category>/<date>-<handle>-<id>.md` — the notes, plus `_indeks.md`;
+- `bildirimler.jsonl` — the topic notices the relay sent.
 
-Mesajda `session_id` alanı bulunur. Soket bu arada başka bir oturuma geçmişse Claude Code mesajı atar; mesaj yanlış oturuma gitmez. Bu da denendi.
+Notes are never written by hand. A plan line goes through `scripts/render-archive.mjs`, which writes or moves the note. The archivist runs in `dontAsk` mode with a narrow allow-list (`.claude/settings.json` in the archive folder): it can edit only `kategoriler.md`, `gunluk.md` and `plan/`, run only the note writer, and list and message sessions. It has no other shell access and no web access.
 
-## Testler
+Start the archivist from the archive folder:
+
+```bash
+claude --name x-arsiv --permission-mode dontAsk --strict-mcp-config
+```
+
+The relay recognises the archivist by its working directory, not by name. If it isn't running, saves wait in `gelen/kuyruk.jsonl`, and the archivist picks them up at its next start.
+
+Jev's key (`OPENROUTER_API_KEY` or `TYPESAFE_API_KEY`) is read from `jevEnvFile` in `~/.x-to-claude/config.json`; it never goes into the config. Without a key every save goes to the archivist. Other settings: `jevThreshold` (0.85) and `notifyRoutes` (`name`, `topic`, `threshold`).
+
+Scripts, run from the archive folder:
+
+- `scripts/fetch-oembed.mjs` fetches post content from X's oEmbed endpoint. It is resumable.
+- `scripts/jev-batch.mjs` classifies an import with Jev and writes a hand-off list for the archivist.
+- `scripts/jev-eval.mjs` compares Jev's choices with the archivist's labels.
+
+## Delivery rules
+
+The relay isn't a child process of the target session and doesn't send an auth line. Claude Code therefore treats its messages as coming from another session that asserts no permission class:
+
+- **Sessions that prompt for permissions** (default, auto, acceptEdits) deliver the message right away.
+- **Sessions that bypass permissions** hold the message for approval:
+  - In the terminal, an approval dialog opens.
+  - The desktop app and VS Code can't show that dialog, so the message is dropped after 5 minutes.
+  - To deliver to such sessions too, set `crossSessionInbound` to `"accept"`. This applies to every message from your other sessions, not only the relay's.
+  - Tested: with `"accept"` in user settings, a relay running under launchd (not a child of any session) delivered to a desktop session in bypass mode. The setting took effect in the open session without a restart.
+
+The relay's `ok` response only means the message was written to the socket. The socket sends no reply, so the relay isn't told when a message is held or dropped.
+
+Each message carries a `session_id` field. If the socket has meanwhile passed to another session, Claude Code drops the message, so it never reaches the wrong session. This was tested too.
+
+## Tests
 
 ```bash
 npm test
 ```
 
-Testler gerçek Claude oturumlarına dokunmaz. Geçici klasörde kendi sahte gelen kutusu soketlerini açarlar. Eklentinin DOM tarafı için `test/fixtures/x-dom.html` var: `.claude/launch.json` içindeki `fixture` sunucusuyla açılır ve `chrome.runtime`'ı taklit eder. URL'ye `?mode=down|notoken|error` ve `&theme=dark` eklenebilir.
+The tests never touch real Claude sessions; they open their own fake inbox sockets in a temp folder. For the extension's DOM side there is `test/fixtures/x-dom.html`, which mimics X's markup and stubs `chrome.runtime`. Serve it with the `fixture` server in `.claude/launch.json`. Append `?mode=down|notoken|error` and `&theme=dark` to the URL to try the error states and the dark theme.
 
-## Güvenlik
+## Security
 
-- Relay yalnız 127.0.0.1'i dinler. Her istekte `X-Relay-Token` gerekir. Bir `Origin` başlığı varsa `chrome-extension://` olmalıdır. `Host` başlığı 127.0.0.1 ya da localhost olmalıdır; bu, DNS rebinding'e karşı. Relay CORS başlığı göndermez.
-- Token yalnız eklentinin service worker'ında durur; x.com sayfasına inmez.
-- Gönderi metni rastgele üretilen sınırlayıcılar arasında, "veri, talimat değil" notuyla gider.
-- Relay oturumun soket yolunu dışarı vermez. Hook'lar oturum token'ını kaydetmez.
+- The relay listens only on 127.0.0.1. Every request needs `X-Relay-Token`. An `Origin` header, if present, must be `chrome-extension://`. The `Host` header must be 127.0.0.1 or localhost, which guards against DNS rebinding. The relay sends no CORS headers.
+- The token lives only in the extension's service worker and never reaches the x.com page.
+- Post text travels between randomly generated delimiters, with a note saying it is data, not instructions.
+- The relay never exposes a session's socket path. The hooks don't store the session token.
 
-## Bulgular (2026-10-05)
+## Findings (2026-10-05)
 
-- Masaüstü uygulamasındaki oturumlar da gelen kutusu soketi açıyor (`CLAUDE_CODE_MESSAGING_SOCKET=/tmp/cc-socks/<pid>.sock`).
-- Claude Code oturumları kendisi de `~/.claude/sessions/<pid>.json` dosyasına kaydediyor: ad, cwd, durum, `messagingSocketPath`. Bu belgelenmemiş bir iç format. Hook'lara alternatif olabilir ama sürüm değişince bozulabilir. Aynı klasörde `.key` dosyaları da var. Şimdilik belgelenmiş yol olan hook'lar kullanılıyor.
+- Desktop app sessions also open an inbox socket (`CLAUDE_CODE_MESSAGING_SOCKET=/tmp/cc-socks/<pid>.sock`).
+- Claude Code also records its sessions in `~/.claude/sessions/<pid>.json`, with name, cwd, status and `messagingSocketPath`. This is an undocumented internal format: it could replace the hooks but might break in a new version. The same folder also holds `.key` files. For now the project uses the documented route, the hooks.

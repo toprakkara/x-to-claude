@@ -140,23 +140,73 @@
     const res = await ask({ type: 'send', sessionId: session.id, tweet });
     if (!res?.ok) return failure(res ?? {});
     closeMenu();
-    btn.dataset.state = 'sent';
     const extra = res.data.batched > 1 ? ` (${res.data.batched} gönderi tek mesajda)` : '';
     toast(`Gönderildi → ${session.name}${extra}`);
+  }
+
+  function tweetOf(article) {
+    try {
+      return x2cExtract.extractTweet(article);
+    } catch {
+      return null;
+    }
+  }
+
+  const statusIdOf = (url) => /\/status\/(\d+)$/.exec(url ?? '')?.[1] ?? null;
+
+  // Sol tık: arşive kaydet. Relay kuyruğa yazar; arşivci oturumu açıksa ona da iletir.
+  async function save(btn, article) {
+    const tweet = tweetOf(article);
+    if (!tweet?.url) return toast('Bu gönderinin bağlantısı okunamadı.', { error: true });
+    if (btn.dataset.state === 'busy') return;
+    const prev = btn.dataset.state;
+    btn.dataset.state = 'busy';
+    const res = await ask({ type: 'save', tweet });
+    if (!res?.ok) {
+      btn.dataset.state = prev ?? '';
+      return toast(res?.error ?? 'Kaydedilemedi.', { error: true });
+    }
+    markSaved(btn);
+    const d = res.data;
+    const told = d.notified?.length ? ` · ${d.notified.join(', ')} bilgilendirildi` : '';
+    if (d.already) toast('Bu gönderi zaten arşivde.');
+    else if (d.karar === 'jev') toast(`Kaydedildi → ${d.kategori}${told}`);
+    else if (d.archivist) toast(`Arşivciye gönderildi; ${d.archivist} sınıflandırıyor${told}`);
+    else toast(`Kuyruğa alındı; arşivci oturumu açılınca işlenecek${told}`);
+  }
+
+  function markSaved(btn) {
+    btn.dataset.state = 'saved';
+    btn.title = 'Arşivde — sağ tık: Claude Code oturumuna gönder';
+    btn.setAttribute('aria-label', 'Arşivde. Sağ tık ya da Shift+Enter: Claude Code oturumuna gönder');
+  }
+
+  // Ekrana gelen gönderilerin arşivde olup olmadığını toplu sorar.
+  const pendingIds = new Map(); // id -> düğmeler
+  let savedTimer = null;
+  function checkSaved(id, btn) {
+    if (!id) return;
+    if (!pendingIds.has(id)) pendingIds.set(id, []);
+    pendingIds.get(id).push(btn);
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(async () => {
+      const batch = new Map(pendingIds);
+      pendingIds.clear();
+      const res = await ask({ type: 'saved', ids: [...batch.keys()] });
+      if (!res?.ok) return;
+      for (const id of res.data.saved) for (const b of batch.get(id) ?? []) markSaved(b);
+    }, 400);
   }
 
   async function openMenu(btn, article) {
     if (anchorBtn === btn) return closeMenu({ restoreFocus: true });
     closeMenu();
 
-    let tweet;
-    try {
-      tweet = x2cExtract.extractTweet(article);
-    } catch {
-      tweet = null;
-    }
+    const tweet = tweetOf(article);
     if (!tweet?.url) return toast('Bu gönderinin bağlantısı okunamadı.', { error: true });
 
+    clearTimeout(toastTimer); // ekranın altındaki bildirim menüyü örtmesin
+    toastEl.hidden = true;
     anchorBtn = btn;
     btn.setAttribute('aria-expanded', 'true');
     menu.className = `menu ${theme()}`;
@@ -237,16 +287,31 @@
     const btn = el('button', 'x2c-btn');
     btn.type = 'button';
     btn.innerHTML = ICON;
-    btn.setAttribute('aria-label', 'Claude Code oturumuna gönder');
+    btn.setAttribute('aria-label', 'Arşive kaydet. Sağ tık ya da Shift+Enter: Claude Code oturumuna gönder');
     btn.setAttribute('aria-haspopup', 'menu');
     btn.setAttribute('aria-expanded', 'false');
-    btn.title = 'Claude Code oturumuna gönder';
-    btn.addEventListener('click', (e) => {
+    btn.title = 'Arşive kaydet — sağ tık: Claude Code oturumuna gönder';
+    const stop = (e) => {
       e.preventDefault();
       e.stopPropagation();
+    };
+    btn.addEventListener('click', (e) => {
+      stop(e);
+      if (e.shiftKey) openMenu(btn, article);
+      else save(btn, article);
+    });
+    btn.addEventListener('contextmenu', (e) => {
+      stop(e);
       openMenu(btn, article);
     });
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'ContextMenu' || (e.shiftKey && (e.key === 'F10' || e.key === 'Enter'))) {
+        stop(e);
+        openMenu(btn, article);
+      }
+    });
     wrap.append(btn);
+    checkSaved(statusIdOf(tweetOf(article)?.url), btn);
 
     if (bookmark) bookmark.parentElement.after(wrap);
     else group.append(wrap);

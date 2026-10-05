@@ -42,6 +42,36 @@ export function loadConfig() {
     cfg.extensionId = null;
     changed = true;
   }
+  // Arşiv klasörü ve arşivci oturumunun adı (sol tık "kaydet" buraya gider).
+  if (typeof cfg.archiveDir !== 'string') {
+    cfg.archiveDir = path.join(os.homedir(), '_DEV', 'x-arsiv');
+    changed = true;
+  }
+  if (typeof cfg.archivistName !== 'string') {
+    cfg.archivistName = 'x-arsiv';
+    changed = true;
+  }
+  // jev: kategori güveni bu eşiği geçerse not doğrudan yazılır, geçmezse arşivciye devredilir.
+  if (typeof cfg.jevThreshold !== 'number') {
+    cfg.jevThreshold = 0.85;
+    changed = true;
+  }
+  // jev anahtarı (OPENROUTER_API_KEY ya da TYPESAFE_API_KEY) bu dosyadan okunur; config.json'a yazılmaz.
+  if (!('jevEnvFile' in cfg)) {
+    cfg.jevEnvFile = path.join(os.homedir(), '_DEV', 'jev-browser', '.env');
+    changed = true;
+  }
+  // Kaydedilen gönderi bir hedefin konusuyla ilgiliyse (jev noul ≥ threshold) relay o oturuma bildirim yollar.
+  if (!Array.isArray(cfg.notifyRoutes)) {
+    cfg.notifyRoutes = [
+      {
+        name: 'Method Path',
+        topic: 'hukuk teknolojisi: hukuk alanında yapay zekâ ve legal-tech; avukatlar, hukuk büroları, şirket hukukçuları ve mahkemeler için ürünler, ajanlar ve şirketler (ör. Harvey, Legora, Spellbook, CoCounsel, Argüman, Yargı Pro, Apilex, De Jure, Defendiora); hukuk benchmark\'ları; içtihat ve mevzuat arama, UYAP/UDF araçları; ürün adı geçmese bile bir hukuk iş akışını (sözleşme inceleme, dava hazırlığı, hukuki araştırma) anlatan gönderiler.',
+        threshold: 0.7,
+      },
+    ];
+    changed = true;
+  }
   // Gelen kutusu önceliği: "now" | "next" | "later". Boşsa Claude Code varsayılanı ("next") geçerli.
   if (!('priority' in cfg)) {
     cfg.priority = null;
@@ -53,6 +83,25 @@ export function loadConfig() {
     fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
   }
   return cfg;
+}
+
+// .env dosyasından yalnız jev'in ihtiyaç duyduğu anahtarları okur; process.env'e yazmaz.
+const JEV_KEYS = ['OPENROUTER_API_KEY', 'TYPESAFE_API_KEY', 'JEV_MODEL'];
+export function loadJevEnv(file) {
+  const env = {};
+  for (const k of JEV_KEYS) if (process.env[k]) env[k] = process.env[k];
+  if (!file) return env;
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch {
+    return env;
+  }
+  for (const line of text.split('\n')) {
+    const m = /^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
+    if (m && JEV_KEYS.includes(m[1]) && !env[m[1]]) env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
+  }
+  return env;
 }
 
 // `npm run token`: eklenti ayarlarına yapıştırılacak değerleri yazdırır.

@@ -35,6 +35,15 @@
   height: 18.75px;
 }
 
-.x2c-btn[data-state="sent"] {
+.x2c-btn[data-state="saved"] {
   color: #d97757;
+}
+
+.x2c-btn[data-state="saved"] svg {
+  stroke-width: 2.8;
+}
+
+.x2c-btn[data-state="busy"] {
+  opacity: 0.5;
+  cursor: progress;
 }

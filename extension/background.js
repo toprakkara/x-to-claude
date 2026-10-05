@@ -64,6 +64,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'send':
       callRelay('/send', { method: 'POST', body: { sessionId: msg.sessionId, tweet: msg.tweet }, timeoutMs: 20_000 }).then(sendResponse);
       return true;
+    case 'save':
+      callRelay('/save', { method: 'POST', body: { tweet: msg.tweet }, timeoutMs: 20_000 }).then(sendResponse);
+      return true;
+    case 'saved': {
+      const ids = (Array.isArray(msg.ids) ? msg.ids : []).filter((id) => /^\d{1,25}$/.test(id)).slice(0, 200);
+      if (!ids.length) {
+        sendResponse({ ok: true, data: { saved: [] } });
+        return false;
+      }
+      callRelay(`/saved?ids=${ids.join(',')}`).then(sendResponse);
+      return true;
+    }
     case 'openOptions':
       chrome.runtime.openOptionsPage();
       sendResponse({ ok: true });

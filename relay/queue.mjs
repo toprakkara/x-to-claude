@@ -4,13 +4,16 @@
 import { formatMessage, LIMITS } from './format.mjs';
 
 export function createQueue({ deliver, debounceMs = 700, minGapMs = 3_000, now = Date.now } = {}) {
-  const lanes = new Map(); // socket -> { target, pending: [], timer, lastSentAt, flushing }
+  // Şerit anahtarı soket + istek türü: aynı oturuma giden "gönder" ve "kaydet" istekleri tek mesajda karışmaz.
+  const lanes = new Map(); // "socket|intent" -> { key, target, pending: [], timer, lastSentAt, flushing }
+  const keyOf = (target) => `${target.socket}|${target.intent ?? 'send'}`;
 
   function lane(target) {
-    let l = lanes.get(target.socket);
+    const key = keyOf(target);
+    let l = lanes.get(key);
     if (!l) {
-      l = { target, pending: [], timer: null, lastSentAt: 0, flushing: false };
-      lanes.set(target.socket, l);
+      l = { key, target, pending: [], timer: null, lastSentAt: 0, flushing: false };
+      lanes.set(key, l);
     }
     l.target = target; // aynı sokette oturum kimliği değiştiyse en yenisi geçerli
     return l;
@@ -25,7 +28,7 @@ export function createQueue({ deliver, debounceMs = 700, minGapMs = 3_000, now =
   // Sınırı aşmadan sığan en uzun önek tek mesaja girer; kalanlar sonraki tura kalır.
   function takeBatch(l) {
     let n = l.pending.length;
-    while (n > 1 && formatMessage(l.pending.slice(0, n).map((x) => x.post)).length > LIMITS.message) n--;
+    while (n > 1 && formatMessage(l.pending.slice(0, n).map((x) => x.post), { intent: l.target.intent }).length > LIMITS.message) n--;
     return l.pending.splice(0, n);
   }
 
@@ -35,7 +38,7 @@ export function createQueue({ deliver, debounceMs = 700, minGapMs = 3_000, now =
     l.flushing = true;
     const batch = takeBatch(l);
     try {
-      const reply = await deliver(l.target, formatMessage(batch.map((x) => x.post)));
+      const reply = await deliver(l.target, formatMessage(batch.map((x) => x.post), { intent: l.target.intent }));
       batch.forEach((x) => x.resolve({ batched: batch.length, reply }));
     } catch (e) {
       batch.forEach((x) => x.reject(e));
@@ -43,12 +46,12 @@ export function createQueue({ deliver, debounceMs = 700, minGapMs = 3_000, now =
       l.lastSentAt = now();
       l.flushing = false;
       if (l.pending.length) schedule(l);
-      else lanes.delete(l.target.socket);
+      else lanes.delete(l.key);
     }
   }
 
   return {
-    // target: { socket, sessionId, priority }
+    // target: { socket, sessionId, priority, intent }
     enqueue(target, post) {
       const l = lane(target);
       const dup = l.pending.find((x) => x.post.url === post.url);

@@ -108,6 +108,11 @@
             { id: 's2', name: 'x-to-claude', cwd: '/Users/toprakkara/_DEV/x-to-claude', entrypoint: 'claude-desktop' },
           ] } };
         }
+        if (msg.type === 'saved') return { ok: true, data: { saved: msg.ids.filter((id) => id === '1844000000000000002') } };
+        if (msg.type === 'save') {
+          if (window.__mode === 'noarchivist') return { ok: true, data: { id: '1', queued: true, archivist: null } };
+          return { ok: true, data: { id: '1', archivist: 'x-arsiv', batched: 1 } };
+        }
         if (msg.type === 'send') {
           if (window.__mode === 'error') return { ok: false, kind: 'http', status: 502, error: 'teslim edilemedi: soket hatası: ECONNREFUSED' };
           return { ok: true, data: { batched: 1 } };
