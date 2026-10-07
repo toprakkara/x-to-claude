@@ -1,0 +1,49 @@
+/* Eylem çubuğundaki düğme; X'in kendi ikon düğmeleriyle aynı ölçüler. */
+.x2c-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.x2c-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34.75px;
+  height: 34.75px;
+  border-radius: 9999px;
+  color: rgb(113, 118, 123);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.x2c-btn:hover,
+.x2c-btn[aria-expanded="true"] {
+  color: #d97757;
+  background-color: rgba(217, 119, 87, 0.1);
+}
+
+.x2c-btn:focus-visible {
+  color: #d97757;
+  outline: 2px solid #d97757;
+  outline-offset: 1px;
+}
+
+.x2c-btn svg {
+  width: 18.75px;
+  height: 18.75px;
+}
+
+.x2c-btn[data-state="saved"] {
+  color: #d97757;
+}
+
+.x2c-btn[data-state="saved"] svg {
+  stroke-width: 2.8;
+}
+
+.x2c-btn[data-state="busy"] {
+  opacity: 0.5;
+  cursor: progress;
+}

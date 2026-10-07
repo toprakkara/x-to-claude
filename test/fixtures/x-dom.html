@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <title>x-to-claude DOM fikstürü</title>
+  <!-- X'in gönderi DOM'unu (data-testid'ler ve iç içe yapı) taklit eden elle yazılmış fikstür.
+       extract.js ve content.js'i tarayıcıda sınamak için; chrome.runtime taklit edilir. -->
+  <link rel="stylesheet" href="../../extension/content.css">
+  <style>
+    body { font: 15px -apple-system, sans-serif; margin: 0; background: rgb(255, 255, 255); color: #0f1419; }
+    body.dark { background: rgb(0, 0, 0); color: #e7e9ea; }
+    main { max-width: 600px; margin: 0 auto; border-inline: 1px solid #eff3f4; }
+    article { padding: 12px 16px; border-bottom: 1px solid #eff3f4; cursor: pointer; }
+    [data-testid="User-Name"] { display: flex; gap: 4px; }
+    [data-testid="User-Name"] > div { display: flex; gap: 4px; }
+    [data-testid="tweetText"] { white-space: pre-wrap; margin: 4px 0 8px; }
+    [role="group"] { display: flex; justify-content: space-between; max-width: 425px; margin-top: 8px; }
+    [role="group"] button { all: unset; width: 34.75px; height: 34.75px; text-align: center; color: rgb(113, 118, 123); }
+    div[role="link"] { border: 1px solid #cfd9de; border-radius: 16px; padding: 12px; margin: 8px 0; }
+    .hidden { display: none; }
+    a { color: #1d9bf0; text-decoration: none; }
+    [data-testid="tweetPhoto"] img { max-width: 100%; height: 120px; background: #eee; display: block; }
+  </style>
+</head>
+<body>
+<main>
+  <!-- 1: emoji, hashtag, kısaltılmış t.co bağlantısı, fotoğraf, kart -->
+  <article data-testid="tweet" role="article" id="t1">
+    <div data-testid="User-Name">
+      <div><a href="/hukukcu" role="link"><span>Bir Hukukçu <img alt="⚖️" src="data:," width="1"></span></a></div>
+      <div><a href="/hukukcu" role="link"><span>@hukukcu</span></a><span>·</span><a href="/hukukcu/status/1844000000000000001" role="link"><time datetime="2026-10-04T09:15:00.000Z">4 Eki</time></a></div>
+    </div>
+    <div data-testid="tweetText" lang="tr"><span>Yapay zekâ ve </span><a href="/hashtag/hukuk">#hukuk</a><span> üzerine kısa not </span><img alt="🔥" src="data:," width="1"><span>
+İkinci satır: </span><a href="https://t.co/AbCdEf"><span class="hidden">https://</span>example.com/legal-ai-rap<span class="hidden">or</span><span aria-hidden="true">…</span></a></div>
+    <div data-testid="tweetPhoto"><img alt="Görsel" src="https://pbs.twimg.com/media/ABC123?format=jpg&amp;name=small"></div>
+    <div data-testid="card.wrapper"><a href="https://t.co/CARD01">example.com · Rapor</a></div>
+    <div role="group" aria-label="Eylemler">
+      <div><button data-testid="reply" aria-label="Yanıtla">💬</button></div>
+      <div><button data-testid="retweet" aria-label="Yeniden gönder">🔁</button></div>
+      <div><button data-testid="like" aria-label="Beğen">♡</button></div>
+      <div><a href="/hukukcu/status/1844000000000000001/analytics">📊</a></div>
+      <div style="display:flex"><div><button data-testid="bookmark" aria-label="Yer imi">🔖</button></div><div><button aria-label="Paylaş">⤴</button></div></div>
+    </div>
+  </article>
+
+  <!-- 2: alıntılanan gönderi (zaman damgası bağlantısız, kendi fotoğrafıyla) -->
+  <article data-testid="tweet" role="article" id="t2">
+    <div data-testid="User-Name">
+      <div><a href="/arastirmaci" role="link"><span>Araştırmacı</span></a></div>
+      <div><a href="/arastirmaci" role="link"><span>@arastirmaci</span></a><span>·</span><a href="/arastirmaci/status/1844000000000000002" role="link"><time datetime="2026-10-05T07:00:00.000Z">5 Eki</time></a></div>
+    </div>
+    <div data-testid="tweetText" lang="tr"><span>Buna katılıyorum </span><a href="/hukukcu">@hukukcu</a></div>
+    <div role="link" tabindex="0">
+      <div data-testid="User-Name">
+        <div><span>Diğer Kişi</span></div>
+        <div><span>@diger</span><span>·</span><time datetime="2026-10-03T12:00:00.000Z">3 Eki</time></div>
+      </div>
+      <div data-testid="tweetText" lang="tr"><span>Alıntılanan içerik burada.</span></div>
+      <div data-testid="tweetPhoto"><img alt="Alıntı görseli" src="https://pbs.twimg.com/media/QQQ999?format=png&amp;name=small"></div>
+    </div>
+    <div role="group" aria-label="Eylemler">
+      <div><button data-testid="reply">💬</button></div>
+      <div><button data-testid="retweet">🔁</button></div>
+      <div><button data-testid="like">♡</button></div>
+      <div><a href="#">📊</a></div>
+      <div style="display:flex"><div><button data-testid="removeBookmark">🔖</button></div><div><button>⤴</button></div></div>
+    </div>
+  </article>
+
+  <!-- 3: kısaltılmış uzun metin, video posteri -->
+  <article data-testid="tweet" role="article" id="t3">
+    <div data-testid="User-Name">
+      <div><a href="/uzun" role="link"><span>Uzun Yazan</span></a></div>
+      <div><a href="/uzun" role="link"><span>@uzun</span></a><span>·</span><a href="/uzun/status/1844000000000000003" role="link"><time datetime="2026-10-05T08:30:00.000Z">5 Eki</time></a></div>
+    </div>
+    <div data-testid="tweetText" lang="tr"><span>Çok uzun bir metnin başı…</span></div>
+    <button data-testid="tweet-text-show-more-link">Devamını göster</button>
+    <div data-testid="tweetPhoto"><video poster="https://pbs.twimg.com/ext_tw_video_thumb/777/pu/img/poster.jpg"></video></div>
+    <div role="group" aria-label="Eylemler">
+      <div><button data-testid="reply">💬</button></div>
+      <div><button data-testid="like">♡</button></div>
+      <div style="display:flex"><div><button data-testid="bookmark">🔖</button></div></div>
+    </div>
+  </article>
+
+  <!-- 4: sonradan eklenen gönderi (MutationObserver) burada belirir -->
+</main>
+
+<script>
+  if (new URLSearchParams(location.search).get('theme') === 'dark') document.body.classList.add('dark');
+  // Gönderiye tıklayınca X gönderi sayfasına gider; düğme bunu durdurmalı.
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('article')) window.__articleClicks = (window.__articleClicks || 0) + 1;
+  });
+  // Service worker'ın yerine geçen taklit: relay yanıtlarını üretir, gönderilenleri kaydeder.
+  window.__mode = new URLSearchParams(location.search).get('mode') || 'ok';
+  window.__sent = [];
+  window.chrome = {
+    runtime: {
+      async sendMessage(msg) {
+        window.__sent.push(JSON.parse(JSON.stringify(msg)));
+        await new Promise((r) => setTimeout(r, 150));
+        if (window.__mode === 'down') return { ok: false, kind: 'unreachable', error: 'Relay\'e ulaşılamadı. Terminalde "npm run relay" çalışıyor mu?' };
+        if (window.__mode === 'notoken') return { ok: false, kind: 'config', error: 'Relay token\'ı ayarlanmamış.' };
+        if (msg.type === 'sessions') {
+          return { ok: true, data: { sessions: [
+            { id: 's1', name: 'method_path', cwd: '/Users/toprakkara/_DEV/method_path', entrypoint: 'cli' },
+            { id: 's2', name: 'x-to-claude', cwd: '/Users/toprakkara/_DEV/x-to-claude', entrypoint: 'claude-desktop' },
+          ] } };
+        }
+        if (msg.type === 'saved') return { ok: true, data: { saved: msg.ids.filter((id) => id === '1844000000000000002') } };
+        if (msg.type === 'save') {
+          if (window.__mode === 'noarchivist') return { ok: true, data: { id: '1', queued: true, archivist: null } };
+          return { ok: true, data: { id: '1', archivist: 'x-arsiv', batched: 1 } };
+        }
+        if (msg.type === 'send') {
+          if (window.__mode === 'error') return { ok: false, kind: 'http', status: 502, error: 'teslim edilemedi: soket hatası: ECONNREFUSED' };
+          return { ok: true, data: { batched: 1 } };
+        }
+        return { ok: true };
+      },
+    },
+  };
+</script>
+<script src="../../extension/extract.js"></script>
+<script src="../../extension/content.js"></script>
+</body>
+</html>

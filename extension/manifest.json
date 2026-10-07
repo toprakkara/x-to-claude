@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "X → Claude Code",
+  "version": "0.1.0",
+  "description": "X'teki bir gönderiyi bu Mac'te açık bir Claude Code oturumuna gönderir (yerel relay üzerinden).",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["extract.js", "content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "X → Claude Code ayarları"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "x-to-claude",
+  "version": "0.1.0",
+  "private": true,
+  "description": "X'teki bir gönderiyi seçilen Claude Code oturumuna gönderir: Chrome eklentisi + yerel relay.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "relay": "node relay/server.mjs",
+    "token": "node relay/config.mjs",
+    "extension:config": "node relay/config.mjs --write-extension",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "hooks:uninstall": "node scripts/install-hooks.mjs --uninstall",
+    "test": "node --test \"test/*.test.mjs\"",
+    "launchd:install": "node scripts/launchd.mjs install",
+    "launchd:uninstall": "node scripts/launchd.mjs uninstall",
+    "launchd:status": "node scripts/launchd.mjs status",
+    "launchd:restart": "node scripts/launchd.mjs restart"
+  }
+}

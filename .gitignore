@@ -1,0 +1,3 @@
+node_modules/
+# Yerel relay token'ı; paylaşılmamalı
+extension/relay.json
