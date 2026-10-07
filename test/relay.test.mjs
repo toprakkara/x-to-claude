@@ -146,7 +146,7 @@ test('varsayılan teslim doğrulanmış tel formatını yazar (session_id ve fro
 test('/save: arşivci kapalıyken kuyruğa yazar, tekrarını eklemez, /saved kimliği bildirir', async () => {
   const tweet = { ...sampleTweet, url: 'https://x.com/someone/status/5551' };
   const r1 = await (await req('/save', { method: 'POST', body: { tweet } })).json();
-  assert.deepEqual(r1, { ok: true, id: '5551', queued: true, archivist: null, jev: null, notified: [] });
+  assert.deepEqual(r1, { ok: true, id: '5551', queued: true, archivist: null, waking: false, jev: null, notified: [] });
   const lines = fs.readFileSync(path.join(archiveDir, 'gelen', 'kuyruk.jsonl'), 'utf8').trim().split('\n');
   assert.equal(lines.length, 1);
   const rec = JSON.parse(lines[0]);
@@ -288,5 +288,25 @@ test('Method Path ilgisi eşiği geçince relay BİLDİRİM yollar ve kayda geç
     s.close();
     mp.close();
     fs.rmSync(path.join(home, 'sessions', 'mp-1.json'), { force: true });
+  }
+});
+
+test('/new-session: açıcıya gönderiyi verir, hatayı 502 olarak döndürür', async () => {
+  const seen = [];
+  const answers = [async (p) => (seen.push(p), { id: 'abc', name: 'X: @someone' }), async () => { throw new (await import('../relay/newsession.mjs')).SessionOpenError('açılamadı'); }];
+  const c2 = { ...config };
+  const s = createRelay({ config: c2, sessionOpener: { open: (p) => answers.shift()(p) } });
+  await new Promise((r) => s.listen(0, '127.0.0.1', r));
+  c2.port = s.address().port;
+  const call = () => fetch(`http://127.0.0.1:${c2.port}/new-session`, { method: 'POST', headers: { 'X-Relay-Token': config.token, 'Content-Type': 'application/json' }, body: JSON.stringify({ tweet: sampleTweet }) });
+  try {
+    const r1 = await call();
+    assert.equal(r1.status, 200);
+    assert.deepEqual(await r1.json(), { ok: true, sessionId: 'abc', name: 'X: @someone' });
+    assert.equal(seen[0].url, 'https://x.com/someone/status/1234567890123456789');
+    const r2 = await call();
+    assert.equal(r2.status, 502);
+  } finally {
+    s.close();
   }
 });

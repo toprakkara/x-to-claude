@@ -50,6 +50,7 @@
       .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
       .badge { font-size: 12px; color: var(--dim); border: 1px solid var(--line); border-radius: 9999px; padding: 0 8px; flex: none; }
       .cwd { font-size: 13px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+      .hint { font-size: 13px; color: var(--dim); }
       .note { padding: 12px 16px; color: var(--dim); }
       .note.error { color: #f4212e; }
       .note button {
@@ -78,12 +79,13 @@
     return r === 0 && g === 0 && b === 0 ? 'dark' : 'dark dim';
   }
 
-  function toast(text, { error = false } = {}) {
+  // sticky: bir sonraki bildirime kadar ekranda kalır (uzun süren işler için).
+  function toast(text, { error = false, sticky = false } = {}) {
     clearTimeout(toastTimer);
     toastEl.className = `toast ${error ? 'error' : ''}`;
     toastEl.textContent = text;
     toastEl.hidden = false;
-    toastTimer = setTimeout(() => (toastEl.hidden = true), error ? 6000 : 3000);
+    if (!sticky) toastTimer = setTimeout(() => (toastEl.hidden = true), error ? 6000 : 3000);
   }
 
   function closeMenu({ restoreFocus = false } = {}) {
@@ -135,6 +137,15 @@
     return `‎${(cwd || '').replace(/^\/Users\/[^/]+/, '~')}‎`;
   }
 
+  // "Yeni oturum": relay ilk turu arka planda yapıp oturumu Claude Desktop'ta açar (birkaç saniye sürer).
+  async function openNewSession(tweet) {
+    closeMenu();
+    toast('Yeni oturum hazırlanıyor; birkaç saniye içinde Claude\'da açılacak…', { sticky: true });
+    const res = await ask({ type: 'newSession', tweet });
+    if (!res?.ok) return toast(res?.error ?? 'Yeni oturum açılamadı.', { error: true });
+    toast(`Claude'da açıldı: ${res.data.name}`);
+  }
+
   async function send(session, tweet, btn) {
     showNote(`"${session.name}" oturumuna gönderiliyor…`);
     const res = await ask({ type: 'send', sessionId: session.id, tweet });
@@ -172,6 +183,7 @@
     if (d.already) toast('Bu gönderi zaten arşivde.');
     else if (d.karar === 'jev') toast(`Kaydedildi → ${d.kategori}${told}`);
     else if (d.archivist) toast(`Arşivciye gönderildi; ${d.archivist} sınıflandırıyor${told}`);
+    else if (d.waking) toast(`Kuyruğa alındı; arşivci arka planda uyandırılıyor${told}`);
     else toast(`Kuyruğa alındı; arşivci oturumu açılınca işlenecek${told}`);
   }
 
@@ -218,10 +230,13 @@
     if (!res?.ok) return failure(res ?? {});
 
     const sessions = res.data.sessions;
-    if (!sessions.length) {
-      return showNote('Kayıtlı açık oturum yok. Hook\'lar kurulduktan sonra başlayan oturumlar burada görünür.');
-    }
-    const items = sessions.map((s) => {
+    const newItem = el('button', 'item');
+    newItem.setAttribute('role', 'menuitem');
+    const newRow = el('div', 'row');
+    newRow.append(el('span', 'name', '＋ Yeni oturum'));
+    newItem.append(newRow, el('div', 'hint', 'Bu gönderiyle Claude Desktop\'ta yeni bir oturum açar'));
+    newItem.addEventListener('click', () => openNewSession(tweet));
+    const items = [newItem, ...sessions.map((s) => {
       const item = el('button', 'item');
       item.setAttribute('role', 'menuitem');
       const row = el('div', 'row');
@@ -231,7 +246,7 @@
       if (s.cwd) item.append(el('div', 'cwd', shortCwd(s.cwd)));
       item.addEventListener('click', () => send(s, tweet, btn));
       return item;
-    });
+    })];
     menu.replaceChildren(el('div', 'head', 'Claude Code\'a gönder'), ...items);
     place();
     items[0].focus({ preventScroll: true });

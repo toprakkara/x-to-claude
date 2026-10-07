@@ -12,6 +12,7 @@ The extension adds a button next to the bookmark button on every post:
 
 - **Left click: save to the archive.** The relay asks Jev (TypeSafe's System One model) which archive category fits. If Jev picks an existing category with confidence ≥ 0.85, the relay writes the note itself. Otherwise the post goes to the archivist, a dedicated Claude Code session that decides and can open a new category. Saved posts show an orange button.
 - **Right click (or Shift+Enter): send to a session.** Lists your live Claude Code sessions, from both the terminal and the desktop app. The post you pick goes to that session as a message, with its URL, author, date, text, any quoted post and media links.
+- **Right click → "＋ Yeni oturum" (New session): discuss the post in a new Desktop session.** The relay runs the first turn in the background with all tools off, because the post is untrusted data: Claude summarises the post and asks what you want to do with it. The relay then opens the session in Claude Desktop with `claude://resume?session=<id>`; the session is named `X: @handle — …`. Code sessions need a folder, so these sessions live in an empty folder of their own (`newSession.dir`, default `~/_DEV/x-sohbet`). The link format was taken from `claude --desktop` in Claude Code 2.1.290; the relay can't call `claude --desktop` itself, because that command needs a terminal.
 
 If Jev judges a saved post relevant to a configured topic (by default legal tech, for the `Method Path` session), the relay sends that session a short notice. The extension's UI text is in Turkish.
 
@@ -78,7 +79,14 @@ Start the archivist from the archive folder:
 claude --name x-arsiv --permission-mode dontAsk --strict-mcp-config
 ```
 
-The relay recognises the archivist by its working directory, not by name. If it isn't running, saves wait in `gelen/kuyruk.jsonl`, and the archivist picks them up at its next start.
+The relay recognises the archivist by its working directory, not by name. You don't need to keep it open: when a save needs the archivist and none is running, the relay wakes it in the background. The relay runs `claude -p` in the archive folder, with the same `dontAsk` permissions and without MCP servers, and passes it the IDs still waiting in `gelen/kuyruk.jsonl`. The archivist classifies them and exits.
+
+- Rapid saves are batched into one wake-up (10 s).
+- A save that arrives during a run triggers one more run afterwards, if it is still waiting.
+- A failed run blocks new wake-ups for 30 minutes.
+- The relay also checks the queue at start-up and every 30 minutes.
+
+Wake-ups are logged to `~/.x-to-claude/arsivci-uyandirma.log`. Settings live in `archivistWake` in `config.json`: `enabled`, `claudePath`, and `model` (`null` uses your default). You can still open the archivist yourself to talk to it; while it is open, the relay sends saves to it instead.
 
 Jev's key (`OPENROUTER_API_KEY` or `TYPESAFE_API_KEY`) is read from `jevEnvFile` in `~/.x-to-claude/config.json`; it never goes into the config. Without a key every save goes to the archivist. Other settings: `jevThreshold` (0.85) and `notifyRoutes` (`name`, `topic`, `threshold`).
 

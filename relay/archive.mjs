@@ -37,6 +37,28 @@ export function createArchive({ dir, archivistName }) {
   return {
     dir,
 
+    // Kuyrukta olup kütüphanede notu olmayan kimlikler (arşivciyi bekleyenler). Önbelleksiz.
+    pendingIds() {
+      const notes = new Set();
+      try {
+        for (const cat of fs.readdirSync(path.join(dir, 'kutuphane'), { withFileTypes: true })) {
+          if (!cat.isDirectory()) continue;
+          for (const f of fs.readdirSync(path.join(dir, 'kutuphane', cat.name))) {
+            const m = /-(\d{1,25})\.md$/.exec(f);
+            if (m) notes.add(m[1]);
+          }
+        }
+      } catch {}
+      const pending = new Set();
+      try {
+        for (const line of fs.readFileSync(queueFile, 'utf8').split('\n')) {
+          const id = /"id":"(\d{1,25})"/.exec(line)?.[1];
+          if (id && !notes.has(id)) pending.add(id);
+        }
+      } catch {}
+      return [...pending];
+    },
+
     savedIds(ids) {
       const all = scan();
       return ids.filter((id) => all.has(id));

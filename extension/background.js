@@ -64,6 +64,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'send':
       callRelay('/send', { method: 'POST', body: { sessionId: msg.sessionId, tweet: msg.tweet }, timeoutMs: 20_000 }).then(sendResponse);
       return true;
+    case 'newSession':
+      // İlk tur arka planda çalıştığı için uzun sürebilir.
+      callRelay('/new-session', { method: 'POST', body: { tweet: msg.tweet }, timeoutMs: 240_000 }).then(sendResponse);
+      return true;
     case 'save':
       callRelay('/save', { method: 'POST', body: { tweet: msg.tweet }, timeoutMs: 20_000 }).then(sendResponse);
       return true;

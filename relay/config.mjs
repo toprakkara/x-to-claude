@@ -72,6 +72,17 @@ export function loadConfig() {
     ];
     changed = true;
   }
+  // Arşivci kapalıyken kuyruğa kayıt düşerse relay onu arka planda `claude -p` ile uyandırır.
+  if (typeof cfg.archivistWake !== 'object' || cfg.archivistWake === null) {
+    cfg.archivistWake = { enabled: true, claudePath: path.join(os.homedir(), '.local', 'bin', 'claude'), model: null };
+    changed = true;
+  }
+  // Sağ tık menüsündeki "Yeni oturum": gönderi için Claude Desktop'ta yeni Code oturumu. Code oturumları bir klasör
+  // istediği için gönderi sohbetlerine ayrılmış boş bir klasör kullanılır.
+  if (typeof cfg.newSession !== 'object' || cfg.newSession === null) {
+    cfg.newSession = { enabled: true, dir: path.join(os.homedir(), '_DEV', 'x-sohbet'), model: null };
+    changed = true;
+  }
   // Gelen kutusu önceliği: "now" | "next" | "later". Boşsa Claude Code varsayılanı ("next") geçerli.
   if (!('priority' in cfg)) {
     cfg.priority = null;
