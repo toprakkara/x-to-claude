@@ -5,6 +5,8 @@
 //                                  yoksa arşivci oturumuna devreder; ilgili oturumlara bildirim yollar
 //   GET  /saved?ids=1,2,3          bu kimliklerden arşivde ya da kuyrukta olanlar
 //   POST /new-session {tweet}      gönderi için Claude Desktop'ta yeni bir oturum açar
+//   GET  /claude-login             Claude CLI girişinin durumu
+//   POST /claude-login             Claude CLI girişini başlatır (tarayıcıda giriş sayfası açılır)
 // Her istekte X-Relay-Token zorunlu. Origin varsa chrome-extension:// olmalı; Host 127.0.0.1/localhost olmalı
 // (DNS rebinding'e karşı). CORS başlığı gönderilmez; web sayfaları yanıtları okuyamaz.
 import http from 'node:http';
@@ -21,6 +23,7 @@ import { createArchive } from './archive.mjs';
 import { loadJevEnv, baseDir } from './config.mjs';
 import { createWaker, wakePrompt } from './waker.mjs';
 import { createSessionOpener, SessionOpenError } from './newsession.mjs';
+import { createClaudeLogin } from './claudelogin.mjs';
 import { judgeTweet, NEW_CATEGORY } from './jev.mjs';
 
 const MAX_BODY = 128 * 1024;
@@ -99,6 +102,11 @@ function defaultSessionOpener(config) {
   return createSessionOpener({ dir: n.dir, claudePath, env: claudeEnv(claudePath), model: n.model, logFile: path.join(baseDir(), 'yeni-oturum.log') });
 }
 
+function defaultClaudeLogin(config, onLogin) {
+  const claudePath = claudePathOf(config);
+  return createClaudeLogin({ claudePath, env: claudeEnv(claudePath), cwd: os.homedir(), logFile: path.join(baseDir(), 'claude-giris.log'), onLogin });
+}
+
 // Arşivciyi arka planda uyandıran süreç.
 function defaultWaker(config, archive) {
   const w = config.archivistWake;
@@ -122,6 +130,7 @@ export function createRelay({
   judge = defaultJudge(config),
   waker = defaultWaker(config, archive),
   sessionOpener = defaultSessionOpener(config),
+  claudeLogin = defaultClaudeLogin(config, () => waker?.retryNow('giriş yenilendi')),
 } = {}) {
   const queue = createQueue({ deliver, ...queueOptions });
   const routes = Array.isArray(config.notifyRoutes) ? config.notifyRoutes : [];
@@ -239,8 +248,17 @@ export function createRelay({
           const { id, name } = await sessionOpener.open(post);
           return send(res, 200, { ok: true, sessionId: id, name });
         } catch (e) {
-          if (e instanceof SessionOpenError) return send(res, 502, { error: e.message });
+          if (e instanceof SessionOpenError) return send(res, 502, { error: e.message, ...(e.code ? { code: e.code } : {}) });
           throw e;
+        }
+      }
+
+      if (pathname === '/claude-login') {
+        if (req.method === 'GET') return send(res, 200, await claudeLogin.status());
+        if (req.method === 'POST') {
+          if (rateLimited()) return send(res, 429, { error: 'çok fazla istek; biraz bekle' });
+          claudeLogin.start();
+          return send(res, 200, { ok: true });
         }
       }
 

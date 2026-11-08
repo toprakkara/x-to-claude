@@ -10,7 +10,7 @@ import { validateTweet } from '../relay/format.mjs';
 const home = tempHome();
 test.after(() => fs.rmSync(home, { recursive: true, force: true }));
 
-// Sahte claude: her çağrıyı kaydeder; çıkış kodları sırayla verilir.
+// Sahte claude: her çağrıyı kaydeder; çıkış kodları sırayla verilir, istenirse stderr çıktısıyla ({ code, err }).
 function fakeSpawn(codes) {
   const calls = [];
   const spawn = (command, args, opts) => {
@@ -19,8 +19,12 @@ function fakeSpawn(codes) {
     child.stderr = new EventEmitter();
     child.kill = () => {};
     calls.push({ command, args, opts });
-    const code = codes.shift();
-    setImmediate(() => child.emit('close', code));
+    const next = codes.shift();
+    const { code, err } = typeof next === 'object' ? next : { code: next };
+    setImmediate(() => {
+      if (err) child.stderr.emit('data', err);
+      child.emit('close', code);
+    });
     return child;
   };
   return { spawn, calls };
@@ -53,8 +57,15 @@ test('önce araçlar kapalı ilk tur, sonra aynı kimlikle Desktop\'ta açma', a
 test('ilk tur başarısız olursa Desktop açılmaz ve hata verilir', async () => {
   const { spawn, calls } = fakeSpawn([1]);
   const opener = createSessionOpener({ dir: path.join(home, 'x2'), claudePath: '/bin/claude', env: {}, spawn });
-  await assert.rejects(opener.open(post), SessionOpenError);
+  await assert.rejects(opener.open(post), (e) => e instanceof SessionOpenError && e.code === undefined);
   assert.equal(calls.length, 1);
+});
+
+test('ilk tur giriş hatasıyla biterse hata claude-login koduyla döner', async () => {
+  const { spawn, calls } = fakeSpawn([{ code: 1, err: 'Failed to authenticate: OAuth session expired and could not be refreshed' }]);
+  const opener = createSessionOpener({ dir: path.join(home, 'x3'), claudePath: '/bin/claude', env: {}, spawn });
+  await assert.rejects(opener.open(post), (e) => e instanceof SessionOpenError && e.code === 'claude-login');
+  assert.equal(calls.length, 1, 'Desktop açılmaz');
 });
 
 test('oturum adı yazar ve metnin başından oluşur', () => {

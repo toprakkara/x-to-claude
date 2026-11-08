@@ -92,8 +92,15 @@ export function createWaker({
     timer = setTimeout(() => start(reason), debounceMs);
   }
 
+  // Başarısızlığın nedeni ortadan kalktıysa (Claude girişi yenilendi) bekleme süresini doldurmadan dener.
+  function retryNow(reason) {
+    blockedUntil = 0;
+    request(reason);
+  }
+
   return {
     request,
+    retryNow,
     get running() {
       return !!child;
     },

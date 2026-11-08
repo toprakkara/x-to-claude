@@ -51,7 +51,7 @@ async function callRelay(path, { method = 'GET', body, timeoutMs = 8_000 } = {})
   }
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) return { ok: false, kind: 'auth', error: 'Token geçersiz. Ayarlardan güncelle.' };
-  if (!res.ok) return { ok: false, kind: 'http', status: res.status, error: data.error || `HTTP ${res.status}` };
+  if (!res.ok) return { ok: false, kind: data.code || 'http', status: res.status, error: data.error || `HTTP ${res.status}` };
   return { ok: true, data };
 }
 
@@ -67,6 +67,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'newSession':
       // İlk tur arka planda çalıştığı için uzun sürebilir.
       callRelay('/new-session', { method: 'POST', body: { tweet: msg.tweet }, timeoutMs: 240_000 }).then(sendResponse);
+      return true;
+    case 'claudeLoginStatus':
+      callRelay('/claude-login').then(sendResponse);
+      return true;
+    case 'claudeLogin':
+      callRelay('/claude-login', { method: 'POST' }).then(sendResponse);
       return true;
     case 'save':
       callRelay('/save', { method: 'POST', body: { tweet: msg.tweet }, timeoutMs: 20_000 }).then(sendResponse);

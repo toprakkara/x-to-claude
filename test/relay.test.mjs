@@ -6,6 +6,7 @@ import { tempHome, fakeInbox, writeSession, sampleTweet } from './helpers.mjs';
 
 const home = tempHome();
 process.env.X2C_HOME = home;
+process.env.CLAUDE_CONFIG_DIR = path.join(home, 'claude'); // gerçek ~/.claude okunmasın
 
 const { createRelay } = await import('../relay/server.mjs');
 const { deliver } = await import('../relay/inbox.mjs');
@@ -306,6 +307,44 @@ test('/new-session: açıcıya gönderiyi verir, hatayı 502 olarak döndürür'
     assert.equal(seen[0].url, 'https://x.com/someone/status/1234567890123456789');
     const r2 = await call();
     assert.equal(r2.status, 502);
+    assert.equal((await r2.json()).code, undefined);
+  } finally {
+    s.close();
+  }
+});
+
+test('/new-session: Claude girişi düşükse yanıtta claude-login kodu olur', async () => {
+  const { SessionOpenError } = await import('../relay/newsession.mjs');
+  const c2 = { ...config };
+  const s = createRelay({ config: c2, sessionOpener: { open: async () => { throw new SessionOpenError('Claude girişi düşmüş', 'claude-login'); } } });
+  await new Promise((r) => s.listen(0, '127.0.0.1', r));
+  c2.port = s.address().port;
+  try {
+    const r = await fetch(`http://127.0.0.1:${c2.port}/new-session`, { method: 'POST', headers: { 'X-Relay-Token': config.token, 'Content-Type': 'application/json' }, body: JSON.stringify({ tweet: sampleTweet }) });
+    assert.equal(r.status, 502);
+    assert.deepEqual(await r.json(), { error: 'Claude girişi düşmüş', code: 'claude-login' });
+  } finally {
+    s.close();
+  }
+});
+
+test('/claude-login: GET durumu verir, POST girişi başlatır; token ve kaynak denetimi geçerli', async () => {
+  let starts = 0;
+  const c2 = { ...config };
+  const s = createRelay({ config: c2, claudeLogin: { status: async () => ({ loggedIn: false, running: starts > 0 }), start: () => starts++ } });
+  await new Promise((r) => s.listen(0, '127.0.0.1', r));
+  c2.port = s.address().port;
+  const call = (method, headers = {}) => fetch(`http://127.0.0.1:${c2.port}/claude-login`, { method, headers: { 'X-Relay-Token': config.token, ...headers } });
+  try {
+    assert.deepEqual(await (await call('GET')).json(), { loggedIn: false, running: false });
+    assert.equal((await call('POST')).status, 200);
+    assert.equal(starts, 1);
+    assert.deepEqual(await (await call('GET')).json(), { loggedIn: false, running: true });
+
+    assert.equal((await call('POST', { 'X-Relay-Token': 'yanlis' })).status, 401);
+    assert.equal((await call('POST', { Origin: 'https://x.com' })).status, 403);
+    assert.equal((await call('DELETE')).status, 404);
+    assert.equal(starts, 1, 'reddedilen istekler girişi başlatmaz');
   } finally {
     s.close();
   }
