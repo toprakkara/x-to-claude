@@ -1,0 +1,3 @@
+node_modules/
+# Local relay token; never share it
+extension/relay.json

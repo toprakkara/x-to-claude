@@ -1,0 +1,28 @@
+{
+  "name": "x-to-claude",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Send posts from X to your Claude Code sessions: a Chromium extension and a local relay.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toprakkara/x-to-claude.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "relay": "node relay/server.mjs",
+    "token": "node relay/config.mjs",
+    "extension:config": "node relay/config.mjs --write-extension",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "hooks:uninstall": "node scripts/install-hooks.mjs --uninstall",
+    "archive:init": "node scripts/init-archive.mjs",
+    "test": "node --test test/*.test.mjs",
+    "launchd:install": "node scripts/launchd.mjs install",
+    "launchd:uninstall": "node scripts/launchd.mjs uninstall",
+    "launchd:status": "node scripts/launchd.mjs status",
+    "launchd:restart": "node scripts/launchd.mjs restart"
+  }
+}

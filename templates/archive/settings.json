@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": [
+      "Read(/**)",
+      "Glob",
+      "Grep",
+      "Edit(/categories.md)",
+      "Edit(/log.md)",
+      "Edit(/plan/**)",
+      "Bash(node {{RENDER_SCRIPT}} *)",
+      "ListAgents",
+      "SendMessage"
+    ],
+    "deny": [
+      "Edit(/CLAUDE.md)",
+      "Edit(/.claude/**)",
+      "Edit(/inbox/**)",
+      "Edit(/library/**)",
+      "WebFetch",
+      "WebSearch",
+      "Read(~/.claude/**)",
+      "Read(~/.x-to-claude/**)",
+      "Read(~/.ssh/**)"
+    ]
+  }
+}
