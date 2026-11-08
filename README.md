@@ -4,6 +4,10 @@ Send a post from X to a Claude Code session on your Mac with one click.
 
 x-to-claude adds a button to every post on x.com. It can send the post to any Claude Code session you have open, start a new session to discuss it, or file it in a searchable archive that Claude keeps organized for you.
 
+![The x-to-claude menu open on a post, offering a new session and a list of live Claude Code sessions](docs/demo.png)
+
+<sub>The extension's session menu. The posts and session names shown are sample data.</sub>
+
 ```
 Browser extension (x.com)  ──HTTP, token──▶  local relay (127.0.0.1:47615)  ──Unix socket──▶  Claude Code session
                                                    ▲
