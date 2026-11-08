@@ -53,6 +53,7 @@
       .hint { font-size: 13px; color: var(--dim); }
       .note { padding: 12px 16px; color: var(--dim); }
       .note.error { color: #f4212e; }
+      .item.login .name { color: #f4212e; }
       .note button {
         all: unset; display: inline-block; margin-top: 8px; padding: 4px 14px; border-radius: 9999px;
         font-weight: 700; color: var(--bg); background: var(--fg); cursor: pointer;
@@ -63,6 +64,12 @@
         color: #fff; background: #d97757; box-shadow: none;
       }
       .toast.error { background: #f4212e; }
+      .toast.has-action:not([hidden]) { display: flex; align-items: center; gap: 12px; }
+      .toast button {
+        all: unset; flex: none; padding: 4px 14px; border-radius: 9999px;
+        font-weight: 700; color: #0f1419; background: #fff; cursor: pointer;
+      }
+      .toast button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     </style>
     <div class="menu" role="menu" aria-label="Claude Code oturumu seç" hidden></div>
     <div class="toast" role="status" aria-live="polite" hidden></div>`;
@@ -80,12 +87,18 @@
   }
 
   // sticky: bir sonraki bildirime kadar ekranda kalır (uzun süren işler için).
-  function toast(text, { error = false, sticky = false } = {}) {
+  // action {label, run}: düğme ekler; basacak zaman olsun diye bildirim daha uzun kalır.
+  function toast(text, { error = false, sticky = false, action } = {}) {
     clearTimeout(toastTimer);
-    toastEl.className = `toast ${error ? 'error' : ''}`;
+    toastEl.className = `toast ${error ? 'error' : ''} ${action ? 'has-action' : ''}`;
     toastEl.textContent = text;
+    if (action) {
+      const b = el('button', '', action.label);
+      b.addEventListener('click', action.run);
+      toastEl.append(b);
+    }
     toastEl.hidden = false;
-    if (!sticky) toastTimer = setTimeout(() => (toastEl.hidden = true), error ? 6000 : 3000);
+    if (!sticky) toastTimer = setTimeout(() => (toastEl.hidden = true), action ? 30_000 : error ? 6000 : 3000);
   }
 
   function closeMenu({ restoreFocus = false } = {}) {
@@ -137,11 +150,38 @@
     return `‎${(cwd || '').replace(/^\/Users\/[^/]+/, '~')}‎`;
   }
 
+  // Claude CLI girişi düşünce: relay tarayıcıda giriş sayfasını açar, burada giriş bitene kadar beklenir.
+  // after: giriş bitince yapılacak iş (yarım kalan yeni oturum). Süre sınırını relay koyar.
+  let loginRun = 0;
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const loginAction = (after) => ({ label: 'Giriş yap', run: () => startLogin(after) });
+
+  async function startLogin(after) {
+    const run = ++loginRun; // "Yeniden aç" önceki beklemeyi geçersiz kılar
+    const res = await ask({ type: 'claudeLogin' });
+    if (run !== loginRun) return;
+    if (!res?.ok) return toast(res?.error ?? 'Giriş başlatılamadı. Terminalde "claude auth login" çalıştır.', { error: true });
+    toast(`Claude giriş sayfası tarayıcıda açıldı. ${after ? 'Girişi tamamlayınca oturum kendiliğinden açılacak.' : 'Girişi orada tamamla.'}`, {
+      sticky: true,
+      action: { label: 'Yeniden aç', run: () => startLogin(after) },
+    });
+    for (;;) {
+      await sleep(2000);
+      if (run !== loginRun) return;
+      const s = await ask({ type: 'claudeLoginStatus' });
+      if (run !== loginRun) return;
+      if (s?.data?.running) continue;
+      if (!s?.data?.loggedIn) return toast('Claude girişi tamamlanmadı.', { error: true, action: loginAction(after) });
+      return after ? after() : toast('Claude girişi tamamlandı.');
+    }
+  }
+
   // "Yeni oturum": relay ilk turu arka planda yapıp oturumu Claude Desktop'ta açar (birkaç saniye sürer).
   async function openNewSession(tweet) {
     closeMenu();
     toast('Yeni oturum hazırlanıyor; birkaç saniye içinde Claude\'da açılacak…', { sticky: true });
     const res = await ask({ type: 'newSession', tweet });
+    if (res?.kind === 'claude-login') return toast('Claude girişin düşmüş, oturum açılamadı.', { error: true, action: loginAction(() => openNewSession(tweet)) });
     if (!res?.ok) return toast(res?.error ?? 'Yeni oturum açılamadı.', { error: true });
     toast(`Claude'da açıldı: ${res.data.name}`);
   }
@@ -183,8 +223,12 @@
     if (d.already) toast('Bu gönderi zaten arşivde.');
     else if (d.karar === 'jev') toast(`Kaydedildi → ${d.kategori}${told}`);
     else if (d.archivist) toast(`Arşivciye gönderildi; ${d.archivist} sınıflandırıyor${told}`);
-    else if (d.waking) toast(`Kuyruğa alındı; arşivci arka planda uyandırılıyor${told}`);
-    else toast(`Kuyruğa alındı; arşivci oturumu açılınca işlenecek${told}`);
+    else if (d.waking) {
+      // Arşivci CLI girişiyle çalışır; giriş düşükse uyanamaz ve kayıt kuyrukta bekler.
+      const login = await ask({ type: 'claudeLoginStatus' });
+      if (login?.data?.loggedIn === false) toast(`Kuyruğa alındı; Claude girişin düşmüş, arşivci giriş yapılana kadar çalışamaz${told}`, { action: loginAction() });
+      else toast(`Kuyruğa alındı; arşivci arka planda uyandırılıyor${told}`);
+    } else toast(`Kuyruğa alındı; arşivci oturumu açılınca işlenecek${told}`);
   }
 
   function markSaved(btn) {
@@ -250,6 +294,25 @@
     menu.replaceChildren(el('div', 'head', 'Claude Code\'a gönder'), ...items);
     place();
     items[0].focus({ preventScroll: true });
+
+    // Giriş durumu ayrıca sorulur: yarım saniye sürebilir, menü onu beklemez.
+    const login = await ask({ type: 'claudeLoginStatus' });
+    if (anchorBtn !== btn || login?.data?.loggedIn !== false || menu.querySelector('.login')) return;
+    menu.querySelector('.head')?.after(loginItem());
+    place();
+  }
+
+  function loginItem() {
+    const item = el('button', 'item login');
+    item.setAttribute('role', 'menuitem');
+    const row = el('div', 'row');
+    row.append(el('span', 'name', 'Claude girişin düşmüş — Giriş yap'));
+    item.append(row, el('div', 'hint', 'Yeni oturum ve arşivci giriş yapılana kadar çalışmaz'));
+    item.addEventListener('click', () => {
+      closeMenu();
+      startLogin();
+    });
+    return item;
   }
 
   // Menü içinde ok tuşlarıyla gezinme, Escape ile kapatma.

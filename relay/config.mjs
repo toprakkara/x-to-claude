@@ -16,6 +16,11 @@ export function sessionsDir() {
   return path.join(baseDir(), 'sessions');
 }
 
+// Claude Code'un yaşayan oturumlar için tuttuğu klasör (<pid>.json).
+export function claudeSessionsDir() {
+  return path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'sessions');
+}
+
 function configPath() {
   return path.join(baseDir(), 'config.json');
 }

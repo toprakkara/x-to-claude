@@ -95,6 +95,13 @@
   // Service worker'ın yerine geçen taklit: relay yanıtlarını üretir, gönderilenleri kaydeder.
   window.__mode = new URLSearchParams(location.search).get('mode') || 'ok';
   window.__sent = [];
+  // mode=login: Claude CLI girişi düşük. window.__finishLogin(true|false) giriş sayfasındaki sonucu taklit eder.
+  window.__loggedIn = window.__mode !== 'login';
+  window.__loginRunning = false;
+  window.__finishLogin = (ok) => {
+    window.__loginRunning = false;
+    window.__loggedIn = ok;
+  };
   window.chrome = {
     runtime: {
       async sendMessage(msg) {
@@ -102,6 +109,15 @@
         await new Promise((r) => setTimeout(r, 150));
         if (window.__mode === 'down') return { ok: false, kind: 'unreachable', error: 'Relay\'e ulaşılamadı. Terminalde "npm run relay" çalışıyor mu?' };
         if (window.__mode === 'notoken') return { ok: false, kind: 'config', error: 'Relay token\'ı ayarlanmamış.' };
+        if (msg.type === 'claudeLoginStatus') return { ok: true, data: { loggedIn: window.__loggedIn, running: window.__loginRunning } };
+        if (msg.type === 'claudeLogin') {
+          window.__loginRunning = true;
+          return { ok: true, data: { ok: true } };
+        }
+        if (msg.type === 'newSession') {
+          if (!window.__loggedIn) return { ok: false, kind: 'claude-login', status: 502, error: 'Claude girişi düşmüş' };
+          return { ok: true, data: { ok: true, sessionId: 'abc', name: 'X: @someone' } };
+        }
         if (msg.type === 'sessions') {
           return { ok: true, data: { sessions: [
             { id: 's1', name: 'method_path', cwd: '/Users/toprakkara/_DEV/method_path', entrypoint: 'cli' },
@@ -111,6 +127,7 @@
         if (msg.type === 'saved') return { ok: true, data: { saved: msg.ids.filter((id) => id === '1844000000000000002') } };
         if (msg.type === 'save') {
           if (window.__mode === 'noarchivist') return { ok: true, data: { id: '1', queued: true, archivist: null } };
+          if (window.__mode === 'login') return { ok: true, data: { id: '1', queued: true, archivist: null, waking: true } };
           return { ok: true, data: { id: '1', archivist: 'x-arsiv', batched: 1 } };
         }
         if (msg.type === 'send') {

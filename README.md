@@ -11,8 +11,9 @@ Browser extension (x.com)  ──HTTP, token──▶  local relay (127.0.0.1:47
 The extension adds a button next to the bookmark button on every post:
 
 - **Left click: save to the archive.** The relay asks Jev (TypeSafe's System One model) which archive category fits. If Jev picks an existing category with confidence ≥ 0.85, the relay writes the note itself. Otherwise the post goes to the archivist, a dedicated Claude Code session that decides and can open a new category. Saved posts show an orange button.
-- **Right click (or Shift+Enter): send to a session.** Lists your live Claude Code sessions, from both the terminal and the desktop app. The post you pick goes to that session as a message, with its URL, author, date, text, any quoted post and media links.
+- **Right click (or Shift+Enter): send to a session.** Lists your live Claude Code sessions, from both the terminal and the desktop app, under their current titles (read from Claude Code's `~/.claude/sessions/<pid>.json`; a session with no title yet shows its folder name). The post you pick goes to that session as a message, with its URL, author, date, text, any quoted post and media links.
 - **Right click → "＋ Yeni oturum" (New session): discuss the post in a new Desktop session.** The relay runs the first turn in the background with all tools off, because the post is untrusted data: Claude summarises the post and asks what you want to do with it. The relay then opens the session in Claude Desktop with `claude://resume?session=<id>`; the session is named `X: @handle — …`. Code sessions need a folder, so these sessions live in an empty folder of their own (`newSession.dir`, default `~/_DEV/x-sohbet`). The link format was taken from `claude --desktop` in Claude Code 2.1.290; the relay can't call `claude --desktop` itself, because that command needs a terminal.
+- **If the Claude CLI login has expired:** new sessions and waking the archivist both run `claude -p`, so they stop working, while Desktop sessions carry on because they manage their own login. The extension shows a "Giriş yap" (Sign in) button in the session menu, after a failed new session, and after a save that can't wake the archivist. The button makes the relay run `claude auth login`, which opens the sign-in page in your browser without needing a terminal. Once you sign in, the interrupted new session opens by itself and the archivist runs straight away. The relay logs this to `~/.x-to-claude/claude-giris.log`.
 
 If Jev judges a saved post relevant to a configured topic (by default legal tech, for the `Method Path` session), the relay sends that session a short notice. The extension's UI text is in Turkish.
 
@@ -117,7 +118,7 @@ Each message carries a `session_id` field. If the socket has meanwhile passed to
 npm test
 ```
 
-The tests never touch real Claude sessions; they open their own fake inbox sockets in a temp folder. For the extension's DOM side there is `test/fixtures/x-dom.html`, which mimics X's markup and stubs `chrome.runtime`. Serve it with the `fixture` server in `.claude/launch.json`. Append `?mode=down|notoken|error` and `&theme=dark` to the URL to try the error states and the dark theme.
+The tests never touch real Claude sessions; they open their own fake inbox sockets in a temp folder. For the extension's DOM side there is `test/fixtures/x-dom.html`, which mimics X's markup and stubs `chrome.runtime`. Serve it with the `fixture` server in `.claude/launch.json`. Append `?mode=down|notoken|error|login` and `&theme=dark` to the URL to try the error states and the dark theme.
 
 ## Security
 
@@ -125,6 +126,7 @@ The tests never touch real Claude sessions; they open their own fake inbox socke
 - The token lives only in the extension's service worker and never reaches the x.com page.
 - Post text travels between randomly generated delimiters, with a note saying it is data, not instructions.
 - The relay never exposes a session's socket path. The hooks don't store the session token.
+- `/claude-login` only runs the fixed commands `claude auth status` and `claude auth login`, behind the same token and Origin checks. You sign in yourself in the browser, and the relay handles no credentials.
 
 ## Findings (2026-10-05)
 

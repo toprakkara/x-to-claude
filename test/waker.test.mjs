@@ -36,6 +36,21 @@ function make(over = {}) {
   return { waker, state, calls: fs.calls };
 }
 
+test('retryNow başarısızlık beklemesini doldurmadan yeniden dener', async () => {
+  const { waker, calls } = make();
+  waker.request();
+  await tick();
+  calls[0].child.emit('close', 1);
+
+  waker.request();
+  await tick();
+  assert.equal(calls.length, 1, 'bekleme süresinde uyandırmaz');
+
+  waker.retryNow('giriş yenilendi');
+  await tick();
+  assert.equal(calls.length, 2);
+});
+
 test('bekleyen kayıt yoksa ya da arşivci açıksa uyandırmaz', async () => {
   const a = make();
   a.state.pending = 0;

@@ -9,8 +9,15 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { spawn as nodeSpawn } from 'node:child_process';
 import { formatMessage } from './format.mjs';
+import { isLoginFailure } from './claudelogin.mjs';
 
-export class SessionOpenError extends Error {}
+// code: eklentinin hataya özel davranması için ('claude-login': giriş yönlendirmesi gösterilir).
+export class SessionOpenError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.code = code;
+  }
+}
 
 export function sessionName(post) {
   const who = post.author?.handle ? `@${post.author.handle}` : 'gönderi';
@@ -61,6 +68,7 @@ export function createSessionOpener({ dir, claudePath, env, model = null, logFil
       const first = await run(claudePath, ['-p', prompt, '--session-id', id, '--name', name, '--tools', '', '--strict-mcp-config', ...(model ? ['--model', model] : [])], 180_000);
       if (first.code !== 0) {
         log(`ilk tur başarısız (${id}): çıkış ${first.code}: ${first.out.slice(-300)}`);
+        if (isLoginFailure(first.out)) throw new SessionOpenError('Claude girişi düşmüş', 'claude-login');
         throw new SessionOpenError('yeni oturumun ilk turu başarısız oldu');
       }
       const open = await run(openCommand, [resumeLink(id)], 30_000);
