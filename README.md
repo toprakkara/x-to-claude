@@ -35,7 +35,14 @@ Post text is untrusted, so every message tells Claude to treat it as data rather
 
 ## Setup
 
-1. Clone the repository and write the relay's token into the extension folder. This creates `~/.x-to-claude/config.json` and `extension/relay.json` (mode 0600, git-ignored):
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/toprakkara/x-to-claude.git
+   ```
+   ```bash
+   cd x-to-claude
+   ```
+   Then write the relay's token into the extension folder. This creates `~/.x-to-claude/config.json` and `extension/relay.json` (mode 0600, git-ignored):
    ```bash
    npm run extension:config
    ```
@@ -141,6 +148,8 @@ Settings live in `~/.x-to-claude/config.json`. Run `npm run launchd:restart` aft
 | `jevEnvFile` | `~/.x-to-claude/jev.env` | Where Jev's key is read from; it's never copied into the config |
 | `jevThreshold` | `0.85` | Confidence needed for Jev to write a note itself |
 | `notifyRoutes` | `[]` | Topic notices: `name`, `topic`, `threshold` |
+
+`claudePath` is also used for new sessions and the sign-in button. It's detected once, when the config is first created, by checking the usual install locations and then your `PATH`. If the extension says Claude Code wasn't found, or you later move your install, set it by hand. `which claude` shows the right value.
 
 Logs are in `~/.x-to-claude/`: `relay.log`, `new-session.log`, `archivist-wake.log` and `claude-login.log`.
 

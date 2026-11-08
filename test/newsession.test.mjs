@@ -68,6 +68,18 @@ test('a first turn that fails on login gives an error with the claude-login code
   assert.equal(calls.length, 1, 'Desktop does not open');
 });
 
+test('a missing claude gives a helpful error that does not reveal the local path', async () => {
+  const claudePath = path.join(home, 'no-such-claude');
+  const opener = createSessionOpener({ dir: path.join(home, 'x4'), claudePath, env: {} });
+  await assert.rejects(opener.open(post), (e) => {
+    assert.ok(e instanceof SessionOpenError);
+    assert.match(e.message, /Claude Code wasn't found.*archivistWake\.claudePath/);
+    assert.ok(!e.message.includes(home));
+    assert.equal(e.code, undefined);
+    return true;
+  });
+});
+
 test('the session name is built from the author and the start of the text', () => {
   assert.match(sessionName(post), /^X: @someone — A thought on legal tech\./);
   assert.ok(sessionName({ ...post, text: 'a'.repeat(200) }).length <= 70);

@@ -69,6 +69,8 @@ export function createSessionOpener({ dir, claudePath, env, model = null, logFil
       if (first.code !== 0) {
         log(`first turn failed (${id}): exit ${first.code}: ${first.out.slice(-300)}`);
         if (isLoginFailure(first.out)) throw new SessionOpenError('Claude login expired', 'claude-login');
+        // The path stays in the log: this message is shown on the x.com page.
+        if (first.code === -1 && /ENOENT/.test(first.out)) throw new SessionOpenError('Claude Code wasn\'t found. Set archivistWake.claudePath in ~/.x-to-claude/config.json.');
         throw new SessionOpenError('the first turn of the new session failed');
       }
       const open = await run(openCommand, [resumeLink(id)], 30_000);

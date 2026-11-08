@@ -157,7 +157,7 @@ function writeIndex(root, categories) {
     const cat = path.basename(path.dirname(p));
     counts.set(cat, (counts.get(cat) ?? 0) + 1);
   }
-  const lines = ['# Library index', '', `${notes.size} posts in total. This file is regenerated on every run.`, '', '| Category | Posts | Description |', '|---|---|---|'];
+  const lines = ['# Library index', '', `${notes.size} ${notes.size === 1 ? 'post' : 'posts'} in total. This file is regenerated on every run.`, '', '| Category | Posts | Description |', '|---|---|---|'];
   for (const [cat, n] of [...counts].sort((a, b) => b[1] - a[1])) lines.push(`| [${cat}](${cat}/) | ${n} | ${categories.get(cat) ?? '—'} |`);
   fs.writeFileSync(path.join(root, 'library', '_index.md'), lines.join('\n') + '\n');
 }

@@ -21,10 +21,20 @@ export function claudeSessionsDir() {
   return path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'sessions');
 }
 
-// The first of the usual install locations that exists.
-function defaultClaudePath() {
-  const candidates = [path.join(os.homedir(), '.local', 'bin', 'claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude'];
-  return candidates.find((p) => fs.existsSync(p)) ?? candidates[0];
+function isExecutableFile(p) {
+  try {
+    fs.accessSync(p, fs.constants.X_OK);
+    return fs.statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
+// Where Claude Code is installed. The usual locations come first because they survive updates. PATH then finds other
+// install methods; the config is first created from the user's shell, whereas launchd's PATH would be too short.
+export function defaultClaudePath(env = process.env, usual = [path.join(os.homedir(), '.local', 'bin', 'claude'), '/opt/homebrew/bin/claude', '/usr/local/bin/claude']) {
+  const onPath = (env.PATH ?? '').split(path.delimiter).filter((dir) => path.isAbsolute(dir)).map((dir) => path.join(dir, 'claude'));
+  return [...usual, ...onPath].find(isExecutableFile) ?? usual[0];
 }
 
 function configPath() {
