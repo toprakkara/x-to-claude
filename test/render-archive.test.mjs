@@ -75,3 +75,18 @@ test('an unknown category, an unknown ID and a bad slug give errors and write no
 test('a plan file cannot be outside the archive folder', () => {
   assert.throws(() => render(root, ['../outside.jsonl']), /outside the archive folder/);
 });
+
+test('the index says "1 post" for a single note', () => {
+  const solo = fs.realpathSync(tempHome());
+  try {
+    fs.writeFileSync(path.join(solo, 'categories.md'), '- agent-tools — Coding agents\n');
+    fs.mkdirSync(path.join(solo, 'inbox'));
+    fs.writeFileSync(path.join(solo, 'inbox', 'queue.jsonl'), jsonl([{ id: '444', url: 'https://x.com/a/status/444', author: { name: 'A', handle: 'a' }, text: 'Agent', source: 'button' }]));
+    fs.mkdirSync(path.join(solo, 'plan'));
+    fs.writeFileSync(path.join(solo, 'plan', 'one.jsonl'), jsonl([{ id: '444', category: 'agent-tools' }]));
+    assert.equal(render(solo, ['plan/one.jsonl']).written, 1);
+    assert.match(fs.readFileSync(path.join(solo, 'library', '_index.md'), 'utf8'), /^1 post in total\./m);
+  } finally {
+    fs.rmSync(solo, { recursive: true, force: true });
+  }
+});
