@@ -1,8 +1,8 @@
 // Optional OpenBot target, off unless config.json has "openbot": { "enabled": true }. It sends a post to the chat of an
 // OpenBot agent on this Mac through OpenBot's Local scripts API, the API that OpenBot's own openbot-cli uses.
 //
-// Verified against the OpenBot desktop app of November 2026 (its automation server and bundled openbot-cli.mjs), but
-// not yet against a live agent:
+// Verified against the OpenBot desktop app of November 2026 (its automation server and bundled openbot-cli.mjs) and
+// tested end to end with a live agent:
 //   - While at least one agent has Local scripts on, OpenBot listens on 127.0.0.1 and writes "url" and "token" to its
 //     automation folder (~/Library/Application Support/OpenBot/automation on macOS). Both change when OpenBot restarts,
 //     so they're read on every request.

@@ -22,13 +22,13 @@ The relay uses OpenBot's **Local scripts** API, the same one OpenBot's `openbot-
 - With OpenBot picked, the menu lists the agents that have Local scripts on (`GET /v1/agents`). Each one shows the OpenBot logo, which the relay reads from the installed OpenBot app and shrinks with macOS's `sips`; the logo isn't part of this repository. The Local scripts API has no per-agent avatars yet.
 - Picking one sends the post to that agent's chat (`POST /v1/agents/<id>/messages`).
 
-The post is validated and cleaned exactly as for Claude Code. It travels inside the same envelope: a note that it's third-party data, not instructions, with the text between random delimiters. Nothing leaves this Mac.
+The post is validated and cleaned exactly as for Claude Code. It travels inside the same envelope: a note that it's third-party data, not instructions, with the text between random delimiters. The relay talks only to OpenBot on this Mac; after that, the agent's model provider sees the message, as with anything you send that agent.
 
 The extension never talks to OpenBot. OpenBot refuses requests that carry an `Origin` header, so only the relay can call it.
 
 The token can do more than send messages: OpenBot also lets it run routines and answer an agent's questions and approvals. The relay uses only the two calls above, sends the token only to a 127.0.0.1 address, and never logs or returns it.
 
-Verified against the OpenBot desktop app of November 2026, but not yet against a live agent. The agent may see the message as if you had typed it, which is why the envelope matters.
+Tested end to end with a live agent in the OpenBot desktop app of November 2026. The agent sees the message as if you had typed it, which is why the envelope matters.
 
 ## Setup
 
