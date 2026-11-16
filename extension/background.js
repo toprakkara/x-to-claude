@@ -77,6 +77,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'save':
       callRelay('/save', { method: 'POST', body: { tweet: msg.tweet }, timeoutMs: 20_000 }).then(sendResponse);
       return true;
+    // OpenBot target (optional). An older relay answers 404 here, and the menu then shows no OpenBot section.
+    case 'openbotAgents':
+      callRelay('/openbot/agents').then(sendResponse);
+      return true;
+    case 'openbotSend':
+      callRelay('/openbot/send', { method: 'POST', body: { agentId: msg.agentId, tweet: msg.tweet }, timeoutMs: 20_000 }).then(sendResponse);
+      return true;
     case 'saved': {
       const ids = (Array.isArray(msg.ids) ? msg.ids : []).filter((id) => /^\d{1,25}$/.test(id)).slice(0, 200);
       if (!ids.length) {

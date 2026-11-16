@@ -1,10 +1,16 @@
 // Adds a button to the action bar of every post on x.com, next to the bookmark button.
 // A left click saves the post to the archive; a right click lists sessions from the relay and sends it to the chosen one.
+// When the relay has the OpenBot target on, a switch at the top of the menu picks Claude Code or OpenBot.
 (() => {
   const ICON =
     '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">' +
     '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg>';
+  // The button icon in OpenBot mode until the relay has sent the OpenBot logo: two eyes, like OpenBot's.
+  const OPENBOT_ICON =
+    '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">' +
+    '<rect x="3" y="4" width="18" height="16" rx="5"/><circle cx="9" cy="12" r="1.6" fill="currentColor"/><circle cx="15" cy="12" r="1.6" fill="currentColor"/></svg>';
   const ENTRYPOINTS = { cli: 'Terminal', 'claude-desktop': 'Desktop', 'claude-vscode': 'VS Code' };
+  const pngDataUrl = (s) => (typeof s === 'string' && s.length < 50_000 && /^data:image\/png;base64,[A-Za-z0-9+/]+=*$/.test(s) ? s : null);
 
   // ---- relay calls (through the service worker) ----
 
@@ -14,6 +20,41 @@
     } catch {
       return { ok: false, kind: 'reload', error: 'The extension was reloaded; refresh this page.' };
     }
+  }
+
+  // ---- target: Claude Code or OpenBot ----
+  // Kept in chrome.storage, so every tab and every button's icon follow the switch. The OpenBot logo is kept there too,
+  // so the buttons can show it before a menu has opened.
+  let mode = 'claude';
+  let logo = null;
+  const store = chrome.storage?.local;
+  store?.get(['x2cMode', 'x2cOpenbotLogo']).then(apply, () => {});
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if (area === 'local') apply(Object.fromEntries(Object.entries(changes).map(([k, c]) => [k, c.newValue])));
+  });
+
+  function apply(values) {
+    if ('x2cMode' in values) mode = values.x2cMode === 'openbot' ? 'openbot' : 'claude';
+    if ('x2cOpenbotLogo' in values) logo = pngDataUrl(values.x2cOpenbotLogo);
+    document.querySelectorAll('.x2c-btn').forEach(paintButton);
+  }
+
+  function remember(values) {
+    apply(values);
+    store?.set(values).catch(() => {});
+  }
+
+  function paintButton(btn) {
+    if (mode === 'openbot' && logo) {
+      const img = document.createElement('img');
+      img.src = logo;
+      img.alt = '';
+      btn.replaceChildren(img);
+    } else btn.innerHTML = mode === 'openbot' ? OPENBOT_ICON : ICON;
+    const saved = btn.dataset.state === 'saved' ? 'In the archive' : 'Save to the archive';
+    const target = mode === 'openbot' ? 'an OpenBot agent' : 'a Claude Code session';
+    btn.title = `${saved} — right-click: send to ${target}`;
+    btn.setAttribute('aria-label', `${saved}. Right-click or Shift+Enter: send to ${target}`);
   }
 
   // ---- menu and toast: a closed shadow DOM, isolated from the page's CSS ----
@@ -49,6 +90,11 @@
       .row { display: flex; align-items: baseline; gap: 8px; }
       .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
       .badge { font-size: 12px; color: var(--dim); border: 1px solid var(--line); border-radius: 9999px; padding: 0 8px; flex: none; }
+      .logo { width: 20px; height: 20px; border-radius: 6px; flex: none; align-self: center; }
+      .switch { display: flex; gap: 4px; margin: 8px 12px; padding: 3px; border-radius: 9999px; background: var(--hover); }
+      .seg { all: unset; flex: 1; text-align: center; padding: 6px 0; border-radius: 9999px; font-weight: 700; font-size: 14px; color: var(--dim); cursor: pointer; }
+      .seg[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+      .seg:focus-visible { outline: 2px solid #d97757; outline-offset: -2px; }
       .cwd { font-size: 13px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
       .hint { font-size: 13px; color: var(--dim); }
       .note { padding: 12px 16px; color: var(--dim); }
@@ -135,7 +181,7 @@
       b.addEventListener('click', action.run);
       note.append(b);
     }
-    menu.replaceChildren(el('div', 'head', 'Send to Claude Code'), note);
+    menu.replaceChildren(el('div', 'head', mode === 'openbot' ? 'Send to OpenBot' : 'Send to Claude Code'), note);
     place();
   }
 
@@ -195,6 +241,75 @@
     toast(`Sent → ${session.name}${extra}`);
   }
 
+  // OpenBot: the relay sends the post to the agent's chat; the agent answers there.
+  async function sendOpenBot(agent, tweet) {
+    showNote(`Sending to "${agent.name}" in OpenBot…`);
+    const res = await ask({ type: 'openbotSend', agentId: agent.id, tweet });
+    if (!res?.ok) return failure(res ?? {});
+    closeMenu();
+    toast(`Sent → ${agent.name}; it answers in its OpenBot chat`);
+  }
+
+  // The agents with Local scripts on. Without any, the menu shows why. With the OpenBot logo from the relay, each
+  // agent gets the logo; otherwise an "OpenBot" badge.
+  function openBotItems(data, tweet) {
+    const icon = pngDataUrl(data.icon);
+    const items = data.agents.map((a) => {
+      const b = el('button', 'item');
+      b.setAttribute('role', 'menuitem');
+      const row = el('div', 'row');
+      if (icon) {
+        const img = el('img', 'logo');
+        img.src = icon;
+        img.alt = '';
+        row.append(img, el('span', 'name', a.name));
+      } else row.append(el('span', 'name', a.name), el('span', 'badge', 'OpenBot'));
+      b.append(row);
+      b.addEventListener('click', () => sendOpenBot(a, tweet));
+      return b;
+    });
+    if (!items.length) items.push(el('div', 'note', data.error || 'No OpenBot agent has Local scripts on.'));
+    return items;
+  }
+
+  function claudeItems(sessions, tweet, btn) {
+    const newItem = el('button', 'item');
+    newItem.setAttribute('role', 'menuitem');
+    const newRow = el('div', 'row');
+    newRow.append(el('span', 'name', '＋ New session'));
+    newItem.append(newRow, el('div', 'hint', 'Opens a new Claude Desktop session with this post'));
+    newItem.addEventListener('click', () => openNewSession(tweet));
+    return [newItem, ...sessions.map((s) => {
+      const item = el('button', 'item');
+      item.setAttribute('role', 'menuitem');
+      const row = el('div', 'row');
+      row.append(el('span', 'name', s.name));
+      if (s.entrypoint) row.append(el('span', 'badge', ENTRYPOINTS[s.entrypoint] ?? s.entrypoint));
+      item.append(row);
+      if (s.cwd) item.append(el('div', 'cwd', shortCwd(s.cwd)));
+      item.addEventListener('click', () => send(s, tweet, btn));
+      return item;
+    })];
+  }
+
+  // The Claude Code | OpenBot switch at the top of the menu. A change applies to every button and every tab.
+  function modeSwitch(rerender) {
+    const wrap = el('div', 'switch');
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-label', 'Send to');
+    for (const [m, label] of [['claude', 'Claude Code'], ['openbot', 'OpenBot']]) {
+      const b = el('button', 'seg', label);
+      b.setAttribute('aria-pressed', String(mode === m));
+      b.addEventListener('click', () => {
+        if (mode === m) return;
+        remember({ x2cMode: m });
+        rerender({ focusSwitch: true });
+      });
+      wrap.append(b);
+    }
+    return wrap;
+  }
+
   function tweetOf(article) {
     try {
       return x2cExtract.extractTweet(article);
@@ -233,8 +348,7 @@
 
   function markSaved(btn) {
     btn.dataset.state = 'saved';
-    btn.title = 'In the archive — right-click: send to a Claude Code session';
-    btn.setAttribute('aria-label', 'In the archive. Right-click or Shift+Enter: send to a Claude Code session');
+    paintButton(btn);
   }
 
   // Asks in bulk whether the posts on screen are already in the archive.
@@ -269,36 +383,33 @@
     menu.hidden = false;
     showNote('Loading sessions…');
 
-    const res = await ask({ type: 'sessions' });
+    const [res, openbot] = await Promise.all([ask({ type: 'sessions' }), ask({ type: 'openbotAgents' })]);
     if (anchorBtn !== btn) return; // closed in the meantime, or another menu opened
     if (!res?.ok) return failure(res ?? {});
 
-    const sessions = res.data.sessions;
-    const newItem = el('button', 'item');
-    newItem.setAttribute('role', 'menuitem');
-    const newRow = el('div', 'row');
-    newRow.append(el('span', 'name', '＋ New session'));
-    newItem.append(newRow, el('div', 'hint', 'Opens a new Claude Desktop session with this post'));
-    newItem.addEventListener('click', () => openNewSession(tweet));
-    const items = [newItem, ...sessions.map((s) => {
-      const item = el('button', 'item');
-      item.setAttribute('role', 'menuitem');
-      const row = el('div', 'row');
-      row.append(el('span', 'name', s.name));
-      if (s.entrypoint) row.append(el('span', 'badge', ENTRYPOINTS[s.entrypoint] ?? s.entrypoint));
-      item.append(row);
-      if (s.cwd) item.append(el('div', 'cwd', shortCwd(s.cwd)));
-      item.addEventListener('click', () => send(s, tweet, btn));
-      return item;
-    })];
-    menu.replaceChildren(el('div', 'head', 'Send to Claude Code'), ...items);
-    place();
-    items[0].focus({ preventScroll: true });
+    // Without the OpenBot target the menu is the Claude Code one, with no switch, and the buttons go back to its icon.
+    const obOn = !!(openbot?.ok && openbot.data?.enabled);
+    if (!obOn && mode === 'openbot') remember({ x2cMode: 'claude' });
+    if (obOn && pngDataUrl(openbot.data.icon) !== logo) remember({ x2cOpenbotLogo: pngDataUrl(openbot.data.icon) });
+
+    let loginExpired = false;
+    const render = ({ focusSwitch = false } = {}) => {
+      const top = obOn ? modeSwitch(render) : el('div', 'head', 'Send to Claude Code');
+      const items = mode === 'openbot' ? openBotItems(openbot.data, tweet) : claudeItems(res.data.sessions, tweet, btn);
+      if (mode === 'claude' && loginExpired) items.unshift(loginItem());
+      menu.replaceChildren(top, ...items);
+      place();
+      const focus = focusSwitch ? top.querySelector('[aria-pressed="true"]') : menu.querySelector('.item');
+      (focus ?? top.querySelector('.seg'))?.focus({ preventScroll: true });
+    };
+    render();
 
     // The login state is requested separately: it can take half a second, and the menu doesn't wait for it.
     const login = await ask({ type: 'claudeLoginStatus' });
-    if (anchorBtn !== btn || login?.data?.loggedIn !== false || menu.querySelector('.login')) return;
-    menu.querySelector('.head')?.after(loginItem());
+    if (anchorBtn !== btn || login?.data?.loggedIn !== false) return;
+    loginExpired = true;
+    if (mode !== 'claude' || menu.querySelector('.login')) return;
+    menu.querySelector('.head, .switch')?.after(loginItem());
     place();
   }
 
@@ -317,7 +428,7 @@
 
   // Arrow-key navigation inside the menu; Escape closes it.
   menu.addEventListener('keydown', (e) => {
-    const items = [...menu.querySelectorAll('.item, .note button')];
+    const items = [...menu.querySelectorAll('.seg, .item, .note button')];
     const i = items.indexOf(root.activeElement);
     if (e.key === 'Escape') closeMenu({ restoreFocus: true });
     else if (e.key === 'ArrowDown') items[(i + 1) % items.length]?.focus();
@@ -364,11 +475,9 @@
     const wrap = el('div', 'x2c-wrap');
     const btn = el('button', 'x2c-btn');
     btn.type = 'button';
-    btn.innerHTML = ICON;
-    btn.setAttribute('aria-label', 'Save to the archive. Right-click or Shift+Enter: send to a Claude Code session');
+    paintButton(btn);
     btn.setAttribute('aria-haspopup', 'menu');
     btn.setAttribute('aria-expanded', 'false');
-    btn.title = 'Save to the archive — right-click: send to a Claude Code session';
     const stop = (e) => {
       e.preventDefault();
       e.stopPropagation();

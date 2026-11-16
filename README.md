@@ -23,6 +23,7 @@ Browser extension (x.com)  ──HTTP, token──▶  local relay (127.0.0.1:47
 | **Right-click** the button (or Shift+Enter) | Lists your live Claude Code sessions, from both the terminal and the desktop app. The post goes to the one you pick, with its URL, author, date, text, any quoted post and media links. |
 | **Right-click → ＋ New session** | Opens a new Claude Desktop session about the post. Claude summarizes it and asks what you'd like to do with it. |
 | **Left-click** the button | Saves the post to your [archive](#the-archive), where it's classified and written up as a Markdown note. Saved posts show an orange button. |
+| **Right-click → OpenBot** (optional) | With the [OpenBot target](docs/openbot.md) on, a switch at the top of the menu lists your OpenBot agents instead. The post goes to the agent you pick, which summarizes it and asks what to do. |
 
 Post text is untrusted, so every message tells Claude to treat it as data rather than instructions. See [Security](#security).
 
@@ -32,6 +33,7 @@ Post text is untrusted, so every message tells Claude to treat it as data rather
 - Node 20 or later. There are no npm dependencies.
 - A Chromium-based browser (Chrome 116+, Arc).
 - [Claude Code](https://code.claude.com/docs). The ＋ New session action also needs Claude Desktop.
+- Optional: the OpenBot desktop app, for the OpenBot target.
 
 ## Setup
 
@@ -148,6 +150,7 @@ Settings live in `~/.x-to-claude/config.json`. Run `npm run launchd:restart` aft
 | `jevEnvFile` | `~/.x-to-claude/jev.env` | Where Jev's key is read from; it's never copied into the config |
 | `jevThreshold` | `0.85` | Confidence needed for Jev to write a note itself |
 | `notifyRoutes` | `[]` | Topic notices: `name`, `topic`, `threshold` |
+| `openbot` | off | Experimental: send posts to OpenBot agents on this Mac. See [docs/openbot.md](docs/openbot.md). |
 
 `claudePath` is also used for new sessions and the sign-in button. It's detected once, when the config is first created, by checking the usual install locations and then your `PATH`. If the extension says Claude Code wasn't found, or you later move your install, set it by hand. `which claude` shows the right value.
 
@@ -174,6 +177,7 @@ Each message carries a `session_id`. If the socket has since passed to another s
 - The first turn of a new session runs with all tools off. The archivist has no web access and a narrow allow-list.
 - The relay never exposes a session's socket path. The hooks don't store the session token.
 - `/claude-login` only runs the fixed commands `claude auth status` and `claude auth login`. You sign in yourself in the browser, and the relay handles no credentials.
+- The OpenBot target talks only to OpenBot's local server on 127.0.0.1. The relay reads OpenBot's token from its automation folder on each request, uses it only to list agents and send messages, and never logs or returns it. Posts reach the agent in the same untrusted-data envelope.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
@@ -185,6 +189,7 @@ These can break with a new Claude Code release or a change to X:
 - Session titles are read from `~/.claude/sessions/<pid>.json`, an undocumented internal file. Without it the menu falls back to folder names. The relay reads only the `name` field, and never the `.key` files in that folder.
 - The `claude://resume` link format comes from `claude --desktop` in Claude Code 2.1.290. The relay can't call `claude --desktop` itself, because that command needs a terminal.
 - The extension reads X's page structure (`data-testid` attributes), which X can change at any time.
+- The optional OpenBot target uses OpenBot's Local scripts API as the OpenBot desktop app of November 2026 has it (`relay/openbot.mjs`).
 
 ## Development
 

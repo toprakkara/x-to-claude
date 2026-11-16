@@ -134,8 +134,33 @@ Second line: </span><a href="https://t.co/AbCdEf"><span class="hidden">https://<
           if (window.__mode === 'error') return { ok: false, kind: 'http', status: 502, error: 'delivery failed: socket error: ECONNREFUSED' };
           return { ok: true, data: { batched: 1 } };
         }
+        // &openbot=1 turns on the OpenBot section (a plain square stands in for the logo), &openbot=nologo shows the badge
+        // instead, &openbot=none shows no agents; with mode=error OpenBot is off.
+        if (msg.type === 'openbotAgents') {
+          const ob = new URLSearchParams(location.search).get('openbot');
+          if (!ob) return { ok: true, data: { enabled: false, agents: [] } };
+          if (window.__mode === 'error') return { ok: true, data: { enabled: true, agents: [], error: 'OpenBot isn\'t running, or no agent has Local scripts on.', code: 'openbot-off' } };
+          const icon = ob === 'nologo' ? null : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAIAAAAC64paAAAAGklEQVR4nGPojvlGNmIY1TyqeVTzqOaB1QwAtjXpb7ueM/IAAAAASUVORK5CYII=';
+          return { ok: true, data: { enabled: true, agents: ob === 'none' ? [] : [{ id: 'agent-1', name: 'Research' }, { id: 'agent-2', name: 'Writing desk' }], icon } };
+        }
+        if (msg.type === 'openbotSend') return { ok: true, data: { ok: true, status: 'queued' } };
         return { ok: true };
       },
+    },
+    // chrome.storage.local, kept in the page's localStorage so the Claude Code | OpenBot switch survives a reload.
+    // localStorage.removeItem('x2c-fixture-storage') resets it.
+    storage: {
+      local: {
+        read: () => JSON.parse(localStorage.getItem('x2c-fixture-storage') || '{}'),
+        async get(keys) {
+          const all = this.read();
+          return Object.fromEntries(keys.filter((k) => k in all).map((k) => [k, all[k]]));
+        },
+        async set(values) {
+          localStorage.setItem('x2c-fixture-storage', JSON.stringify({ ...this.read(), ...values }));
+        },
+      },
+      onChanged: { addListener() {} },
     },
   };
 </script>

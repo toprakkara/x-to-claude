@@ -7,6 +7,8 @@
 //   POST /new-session {tweet}      opens a new Claude Desktop session for the post
 //   GET  /claude-login             state of the Claude CLI login
 //   POST /claude-login             starts the Claude CLI login (opens the sign-in page in the browser)
+//   GET  /openbot/agents           OpenBot agents with Local scripts on, and the OpenBot logo ({enabled: false} when off)
+//   POST /openbot/send {agentId, tweet}  sends the post to that OpenBot agent's chat (see openbot.mjs)
 // Every request needs X-Relay-Token. Origin, if present, must be chrome-extension://; Host must be 127.0.0.1 or localhost
 // (this guards against DNS rebinding). No CORS headers are sent, so web pages can't read responses.
 import http from 'node:http';
@@ -25,6 +27,7 @@ import { createWaker, wakePrompt } from './waker.mjs';
 import { createSessionOpener, SessionOpenError } from './newsession.mjs';
 import { createClaudeLogin } from './claudelogin.mjs';
 import { judgeTweet, NEW_CATEGORY } from './jev.mjs';
+import { createOpenBot, OpenBotError } from './openbot.mjs';
 
 const MAX_BODY = 128 * 1024;
 const RATE = { windowMs: 60_000, max: 30 };
@@ -131,6 +134,7 @@ export function createRelay({
   waker = defaultWaker(config, archive),
   sessionOpener = defaultSessionOpener(config),
   claudeLogin = defaultClaudeLogin(config, () => waker?.retryNow('login renewed')),
+  openbot = createOpenBot({ config }),
 } = {}) {
   const queue = createQueue({ deliver, ...queueOptions });
   const routes = Array.isArray(config.notifyRoutes) ? config.notifyRoutes : [];
@@ -275,10 +279,32 @@ export function createRelay({
         return send(res, 200, { ok: true, session: publicView(session), batched: result.batched });
       }
 
+      if (req.method === 'GET' && pathname === '/openbot/agents') {
+        if (!openbot) return send(res, 200, { enabled: false, agents: [] });
+        try {
+          const [agents, icon] = await Promise.all([openbot.agents(), openbot.icon()]);
+          return send(res, 200, { enabled: true, agents, icon });
+        } catch (e) {
+          // The menu shows the reason in its OpenBot section; the Claude Code part still works.
+          if (!(e instanceof OpenBotError)) throw e;
+          return send(res, 200, { enabled: true, agents: [], error: e.message, code: e.code });
+        }
+      }
+
+      if (req.method === 'POST' && pathname === '/openbot/send') {
+        if (!openbot) return send(res, 404, { error: 'the OpenBot target is turned off' });
+        if (rateLimited()) return send(res, 429, { error: 'too many requests; wait a moment' });
+        const body = await jsonBody(req);
+        const post = validateTweet(body?.tweet);
+        const { status } = await openbot.send(body?.agentId, post);
+        return send(res, 200, { ok: true, status });
+      }
+
       return send(res, 404, { error: 'not found' });
     } catch (e) {
       if (e instanceof ValidationError) return send(res, 400, { error: e.message });
       if (e instanceof DeliveryError) return send(res, 502, { error: `delivery failed: ${e.message}` });
+      if (e instanceof OpenBotError) return send(res, e.status, { error: e.message, code: e.code });
       if (e.status) return send(res, e.status, { error: e.message });
       console.error(e);
       return send(res, 500, { error: 'relay internal error' });
